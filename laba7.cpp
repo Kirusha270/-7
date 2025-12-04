@@ -6,15 +6,14 @@
 
 using namespace std;
 
-// ------------------- Вывод vector -------------------
-
+// Вывод vector
 void printVector(const vector<int>& v) {    //  передаем по ссылке
     cout << "[ ";
     for (int x : v) cout << x << " ";   
     cout << "]";
 }
 
-// ------------------- Вывод array --------------------
+// Вывод array 
 
 void printArray(const array<int, 10>& a) {
     cout << "[ ";
@@ -22,7 +21,7 @@ void printArray(const array<int, 10>& a) {
     cout << "]";
 }
 
-// ----------- разложение K = 1+2+3+... ----------
+//  разложение K = 1+2+3+... 
 
 vector<int> expandK(int K) {   //  к как сумма нат чисел
     vector<int> res;           
@@ -38,7 +37,7 @@ vector<int> expandK(int K) {   //  к как сумма нат чисел
     return {};      // разложить нельзя
 }
 
-// ---------------- Пункт 2:----------------
+// Пункт 2
 
 // — По значению (копия)
 void sortValue(array<int, 10> a) {    // копия входного массива
@@ -58,7 +57,7 @@ void sortPtr(array<int, 10>* a) {    //  адрес массива
     sort(a->begin(), a->end());      // обращение к реальному массиву
 }
 
-// --------------------------- MAIN ---------------------------
+
 
 int main() {
     setlocale(LC_ALL, "ru");
@@ -80,13 +79,13 @@ int main() {
         cin >> choice;
         cout << endl;
 
-        // ---------- 1. Просмотр ----------
+        //  1. Просмотр
         if (choice == 1) {
             printVector(arr);
             cout << endl;
         }
 
-        // ---------- 2. Добавление в начало ----------
+        // 2. Добавление в начало
         else if (choice == 2) {
             int x;
             cout << "Введите элемент: ";
@@ -98,7 +97,7 @@ int main() {
             cout << endl;
         }
 
-        // ---------- 3. Добавление в конец ----------
+        //  3. Добавление в конец 
         else if (choice == 3) {
             int x;
             cout << "Введите элемент: ";
@@ -110,7 +109,7 @@ int main() {
             cout << endl;
         }
 
-        // ---------- 4. Очистка ----------
+        //  4. Очистка 
         else if (choice == 4) {
             cout << "До: "; printVector(arr);
             arr.clear();
@@ -118,7 +117,7 @@ int main() {
             cout << endl;
         }
 
-        // ---------- 5. Поиск ----------
+        //  5. Поиск 
         else if (choice == 5) {
             int x;
             cout << "Введите искомое число: ";
@@ -133,7 +132,7 @@ int main() {
             cout << "]\n";
         }
 
-        // ---------- 6. Вариант 5 ----------
+        //  6. Вариант 5 
         else if (choice == 6) {
             int K;
             cout << "Введите K: ";
@@ -169,7 +168,7 @@ int main() {
             cout << endl;
         }
 
-        // ---------- 7.  пункт 2 ----------
+        //  7.  пункт 2 
         else if (choice == 7) {
             array<int, 10> a;
 
@@ -208,4 +207,5 @@ int main() {
     } while (choice != 0);
 
     return 0;
+
 }
