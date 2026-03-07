@@ -1,12 +1,12 @@
 #include "Product.h"
 
 void Product::setName(const string& n) {
-    if (n.empty()) throw "Имя пустое";
+    if (n.empty()) throw "РРјСЏ РїСѓСЃС‚РѕРµ";
     name = n;
 }
 
-Product::Product() : name("товар"), price(0), exp(0), place("склад") {
-    comp.push_back("вода");
+Product::Product() : name("С‚РѕРІР°СЂ"), price(0), exp(0), place("СЃРєР»Р°Рґ") {
+    comp.push_back("РІРѕРґР°");
 }
 
 Product::Product(string n, double p, int e, vector<string> c, string pl)
@@ -36,17 +36,17 @@ Product& Product::operator=(const Product& other) {
 
 Product::~Product() {
     comp.clear();
-    cout << "Удаление: " << name << endl;
+    cout << "РЈРґР°Р»РµРЅРёРµ: " << name << endl;
 }
 
 void Product::setPrice(double p) {
-    if (p < 0) throw "Цена < 0";
+    if (p < 0) throw "Р¦РµРЅР° < 0";
     price = p;
 }
 
 void Product::show() const {
-    cout << "\n" << name << ": " << price << " руб, "
-        << exp << " дн, состав: ";
+    cout << "\n" << name << ": " << price << " СЂСѓР±, "
+        << exp << " РґРЅ, СЃРѕСЃС‚Р°РІ: ";
 
     for (size_t i = 0; i < comp.size(); i++) {
         cout << comp[i];
@@ -56,7 +56,7 @@ void Product::show() const {
 }
 
 void Product::reduceExp(int days) {
-    if (days < 0) throw "Дни < 0";
+    if (days < 0) throw "Р”РЅРё < 0";
     exp = max(0, exp - days);
 }
 
@@ -75,7 +75,7 @@ Product Product::operator+(const Product& other) const {
     }
 
     return Product(
-        "смесь " + name + " и " + other.name,
+        "Г±Г¬ГҐГ±Гј " + name + " Рё " + other.name,
         (price + other.price) * 0.9,
         min(exp, other.exp),
         newComp,
@@ -93,9 +93,9 @@ Product& Product::operator-=(const Product& other) {
             ++it;
     }
 
-    comp.push_back("консервант Т1000");
+    comp.push_back("РєРѕРЅСЃРµСЂРІР°РЅС‚ Рў1000");
 
-    name = "выбор " + name + " без " + other.name;
+    name = "РІС‹Р±РѕСЂ " + name + " Р±РµР· " + other.name;
     price = price * 0.9;
     exp = max(0, exp - 2);
 
@@ -105,4 +105,5 @@ Product& Product::operator-=(const Product& other) {
 ostream& operator<<(ostream& os, const Product& p) {
     os << "Product{" << p.name << "}";
     return os;
+
 }
