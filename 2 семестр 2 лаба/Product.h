@@ -22,7 +22,7 @@ public:
     string place;
 
     Product();
-    Product(string n, double p, int e, vector<string> c, string pl = "ρκλΰδ");
+    Product(string n, double p, int e, vector<string> c, string pl = "ΡΠΊΠ»Π°Π΄");
     Product(const Product& other);
     Product& operator=(const Product& other);
     ~Product();
@@ -42,3 +42,4 @@ public:
 };
 
 #endif
+
