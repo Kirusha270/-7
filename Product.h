@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+
 using namespace std;
 
 class Product {
@@ -13,13 +14,15 @@ private:
     double price;
     vector<string> comp;
     void setName(const string& n);
+
 protected:
     int exp;
+
 public:
     string place;
 
     Product();
-    Product(string n, double p, int e, vector<string> c, string pl = "Склад");
+    Product(string n, double p, int e, vector<string> c, string pl = "склад");
     Product(const Product& other);
     Product& operator=(const Product& other);
     ~Product();
@@ -33,7 +36,7 @@ public:
     void reduceExp(int days);
 
     Product operator+(const Product& other) const;
-    Product operator-(const Product& other) const;
+    Product& operator-=(const Product& other);
 
     friend ostream& operator<<(ostream& os, const Product& p);
 };

@@ -5,8 +5,8 @@ void Product::setName(const string& n) {
     name = n;
 }
 
-Product::Product() : name("Товар"), price(0), exp(0), place("Склад") {
-    comp.push_back("основа");
+Product::Product() : name("товар"), price(0), exp(0), place("склад") {
+    comp.push_back("вода");
 }
 
 Product::Product(string n, double p, int e, vector<string> c, string pl)
@@ -17,8 +17,9 @@ Product::Product(string n, double p, int e, vector<string> c, string pl)
 }
 
 Product::Product(const Product& other)
-    : name(other.name), price(other.price), exp(other.exp),
-    place(other.place), comp(other.comp) {
+    : name(other.name), price(other.price),
+    exp(other.exp), place(other.place),
+    comp(other.comp) {
 }
 
 Product& Product::operator=(const Product& other) {
@@ -34,8 +35,8 @@ Product& Product::operator=(const Product& other) {
 }
 
 Product::~Product() {
-    cout << "Удален: " << name << endl;
     comp.clear();
+    cout << "Удаление: " << name << endl;
 }
 
 void Product::setPrice(double p) {
@@ -44,8 +45,10 @@ void Product::setPrice(double p) {
 }
 
 void Product::show() const {
-    cout << "\n" << name << ": " << price << "руб, " << exp << "дн, Состав: ";
-    for (size_t i = 0; i < comp.size(); ++i) {
+    cout << "\n" << name << ": " << price << " руб, "
+        << exp << " дн, состав: ";
+
+    for (size_t i = 0; i < comp.size(); i++) {
         cout << comp[i];
         if (i < comp.size() - 1) cout << ", ";
     }
@@ -58,30 +61,45 @@ void Product::reduceExp(int days) {
 }
 
 Product Product::operator+(const Product& other) const {
-    vector<string> newComp = comp;
-    for (const string& item : other.comp) {
-        if (find(newComp.begin(), newComp.end(), item) == newComp.end()) {
+
+    vector<string> newComp;
+
+    for (const auto& item : comp) {
+        if (find(newComp.begin(), newComp.end(), item) == newComp.end())
             newComp.push_back(item);
-        }
     }
-    return Product("смесь " + name + " и " + other.name,
+
+    for (const auto& item : other.comp) {
+        if (find(newComp.begin(), newComp.end(), item) == newComp.end())
+            newComp.push_back(item);
+    }
+
+    return Product(
+        "смесь " + name + " и " + other.name,
         (price + other.price) * 0.9,
         min(exp, other.exp),
-        newComp, place);
+        newComp,
+        place
+    );
 }
 
-Product Product::operator-(const Product& other) const {
-    vector<string> newComp;
-    for (const string& item : comp) {
-        if (find(other.comp.begin(), other.comp.end(), item) == other.comp.end()) {
-            newComp.push_back(item);
-        }
+Product& Product::operator-=(const Product& other) {
+
+    for (auto it = comp.begin(); it != comp.end();) {
+
+        if (find(other.comp.begin(), other.comp.end(), *it) != other.comp.end())
+            it = comp.erase(it);
+        else
+            ++it;
     }
-    newComp.push_back("консервант Т1000");
-    return Product("выбор " + name + " без " + other.name,
-        price * 0.9,
-        max(0, exp - 2),
-        newComp, place);
+
+    comp.push_back("консервант Т1000");
+
+    name = "выбор " + name + " без " + other.name;
+    price = price * 0.9;
+    exp = max(0, exp - 2);
+
+    return *this;
 }
 
 ostream& operator<<(ostream& os, const Product& p) {
