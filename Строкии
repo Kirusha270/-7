@@ -1,0 +1,365 @@
+#include <iostream>
+#include <fstream>
+#include <windows.h>
+
+using namespace std;
+
+// Проверка: русская гласная
+int is_ru_vowel(unsigned char c)
+{
+    unsigned char vowels[] = {
+        224, 229, 184, 232, 238, 243,
+        250, 251, 252, 253, 254, 255
+    }; // а е ё и о у ъ ы ь э ю я
+
+    for (int i = 0; i < 12; i++)
+        if (c == vowels[i])
+            return 1;
+
+    return 0;
+}
+
+// Проверка: английская гласная
+int is_eng_vowel(char c)
+{
+    const char vowels[] = "aeiouy";
+
+    for (int i = 0; vowels[i]; i++)
+        if (c == vowels[i])
+            return 1;
+
+    return 0;
+}
+
+// Проверка: буква
+int is_letter(unsigned char c)
+{
+    return
+        (c >= 'A' && c <= 'Z') ||
+        (c >= 'a' && c <= 'z') ||
+        (c >= 192);
+}
+
+// Перевод в нижний регистр
+unsigned char to_lower(unsigned char c)
+{
+    if (c >= 'A' && c <= 'Z')
+        return c + 32;
+
+    if (c >= 192 && c <= 223)
+        return c + 32;
+
+    if (c == 168)
+        return 184;
+
+    return c;
+}
+
+// Длина слова (без дефисов)
+int word_length(const char* s)
+{
+    int len = 0;
+
+    for (int i = 0; s[i]; i++)
+    {
+        if (s[i] != '-')
+            len++;
+    }
+
+    return len;
+}
+
+// Проверка: содержит ли слово букву из запрещённого слова
+int contains_forbidden(const char* word, const char* forbidden)
+{
+    for (int i = 0; word[i]; i++)
+    {
+        for (int j = 0; forbidden[j]; j++)
+        {
+            if (word[i] == forbidden[j])
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
+// Копирование строки
+void copy_string(char* dst, const char* src)
+{
+    int i;
+
+    for (i = 0; src[i]; i++)
+        dst[i] = src[i];
+
+    dst[i] = '\0';
+}
+
+// Проверка уникальности
+int is_unique(char words[][101], int count, const char* word)
+{
+    for (int i = 0; i < count; i++)
+    {
+        int same = 1;
+
+        for (int j = 0; words[i][j] || word[j]; j++)
+        {
+            if (words[i][j] != word[j])
+            {
+                same = 0;
+                break;
+            }
+        }
+
+        if (same)
+            return 0;
+    }
+
+    return 1;
+}
+
+int main()
+{
+    SetConsoleCP(1251);
+    SetConsoleOutputCP(1251);
+
+    // ---------- Создание тестовых файлов ----------
+    ofstream finput("input.txt");
+    finput << "5 кот\n";
+    finput.close();
+
+    ofstream ftext_create("text.txt");
+    ftext_create << "Кот, что-то год123 1924-й ком,- Кот-кот, тест.\n";
+    ftext_create.close();
+
+    cout << "Файлы input.txt и text.txt созданы.\n";
+
+    // ---------------- Пункт 0 ----------------
+    cout << "\nТаблица Буква/Код:\n";
+
+    for (int c = 'A'; c <= 'Z'; c++)
+        cout << (char)c << " = " << c << "\n";
+
+    for (int c = 'a'; c <= 'z'; c++)
+        cout << (char)c << " = " << c << "\n";
+
+    for (int c = 192; c <= 223; c++)
+        cout << (char)c << " = " << c << "\n";
+
+    cout << (char)168 << " = 168\n";
+
+    for (int c = 224; c <= 255; c++)
+        cout << (char)c << " = " << c << "\n";
+
+    cout << (char)184 << " = 184\n";
+
+    for (int c = '0'; c <= '9'; c++)
+        cout << (char)c << " = " << c << "\n";
+
+    const char punctuation[] = ".,!?;:-()\"'";
+
+    for (int i = 0; punctuation[i]; i++)
+        cout << punctuation[i] << " = "
+             << (int)(unsigned char)punctuation[i] << "\n";
+
+    // ---------------- Задача 1 ----------------
+    char str[101];
+
+    cout << "\nВведите строку:\n";
+    cin.getline(str, 101);
+
+    char result1[101];
+    int k = 0;
+
+    for (int i = 0; str[i]; i++)
+    {
+        unsigned char c = (unsigned char)str[i];
+
+        // английские согласные
+        if (c >= 'a' && c <= 'z')
+        {
+            if (is_eng_vowel(c))
+                result1[k++] = c;
+        }
+        else if (c >= 'A' && c <= 'Z')
+        {
+            if (is_eng_vowel(c + 32))
+                result1[k++] = c;
+        }
+
+        // русские буквы
+        else if (c >= 224 || c == 184)
+        {
+            if (is_ru_vowel(c))
+                result1[k++] = c;
+        }
+        else if ((c >= 192 && c <= 223) || c == 168)
+        {
+            if (is_ru_vowel(to_lower(c)))
+                result1[k++] = c;
+        }
+
+        // не буквы
+        else
+        {
+            result1[k++] = c;
+        }
+    }
+
+    result1[k] = '\0';
+
+    cout << "\nРезультат задачи 1:\n";
+    cout << result1 << "\n";
+
+    // ---------------- Задача 2 ----------------
+    ifstream fin("input.txt");
+
+    if (!fin)
+    {
+        cout << "Ошибка открытия input.txt\n";
+        return 1;
+    }
+
+    int N;
+    char forbidden[101];
+
+    fin >> N;
+    fin >> forbidden;
+
+    fin.close();
+
+    // перевод запрещённого слова в нижний регистр
+    for (int i = 0; forbidden[i]; i++)
+        forbidden[i] = to_lower((unsigned char)forbidden[i]);
+
+    ifstream ftext("text.txt", ios::binary);
+
+    if (!ftext)
+    {
+        cout << "Ошибка открытия text.txt\n";
+        return 1;
+    }
+
+    char text[10001];
+
+    ftext.read(text, 10000);
+
+    int text_len = (int)ftext.gcount();
+
+    text[text_len] = '\0';
+
+    ftext.close();
+
+    char words[1000][101];
+    int word_count = 0;
+
+    char temp[101];
+    int t = 0;
+
+    for (int i = 0; i <= text_len; i++)
+    {
+        unsigned char c = (unsigned char)text[i];
+
+        int is_part =
+            (c >= '0' && c <= '9') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= 192) ||
+            c == '-';
+
+        if (is_part)
+        {
+            if (c == '-' && t == 0)
+                continue;
+
+            // если цифра после букв -> слово закончить
+            if ((c >= '0' && c <= '9') && t > 0)
+            {
+                temp[t] = '\0';
+
+                if (is_unique(words, word_count, temp))
+                {
+                    copy_string(words[word_count], temp);
+                    word_count++;
+                }
+
+                t = 0;
+
+                while ((text[i] >= '0' && text[i] <= '9'))
+                    i++;
+
+                continue;
+            }
+
+            // нижний регистр
+            c = to_lower(c);
+
+            if (t < 100)
+                temp[t++] = c;
+        }
+        else
+        {
+            if (t > 0)
+            {
+                // слово должно заканчиваться буквой
+                unsigned char last = (unsigned char)temp[t - 1];
+
+                if (is_letter(last))
+                {
+                    temp[t] = '\0';
+
+                    if (is_unique(words, word_count, temp))
+                    {
+                        copy_string(words[word_count], temp);
+                        word_count++;
+                    }
+                }
+
+                t = 0;
+            }
+        }
+    }
+
+    // Отбор слов
+    char result[1000][101];
+    int res_count = 0;
+
+    for (int i = 0; i < word_count; i++)
+    {
+        if (!contains_forbidden(words[i], forbidden))
+        {
+            copy_string(result[res_count], words[i]);
+            res_count++;
+        }
+    }
+
+    // Сортировка по невозрастанию длины
+    for (int i = 0; i < res_count - 1; i++)
+    {
+        for (int j = i + 1; j < res_count; j++)
+        {
+            if (word_length(result[i]) < word_length(result[j]))
+            {
+                char tmp[101];
+
+                copy_string(tmp, result[i]);
+                copy_string(result[i], result[j]);
+                copy_string(result[j], tmp);
+            }
+        }
+    }
+
+    if (res_count > N)
+        res_count = N;
+
+    ofstream fout("result.txt");
+
+    for (int i = 0; i < res_count; i++)
+        fout << result[i] << "\n";
+
+    fout.close();
+
+    cout << "\nРезультат задачи 2 записан в result.txt\n";
+
+    return 0;
+}
