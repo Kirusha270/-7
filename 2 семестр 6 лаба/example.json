@@ -1,0 +1,26 @@
+[
+    {
+        "name": "Рюкзак",
+        "description": "Городской рюкзак",
+        "slots": 5,
+        "maxWeight": 12.5
+    },
+    {
+        "name": "Сумка-мессенджер",
+        "description": "Через плечо",
+        "slots": 2,
+        "maxWeight": 4.0
+    },
+    {
+        "name": "Чемодан",
+        "description": "",
+        "slots": 3,
+        "maxWeight": 20.0
+    },
+    {
+        "name": "Портфель",
+        "description": "Деловой",
+        "slots": -1,
+        "maxWeight": 5.0
+    }
+]
