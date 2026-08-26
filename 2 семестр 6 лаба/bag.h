@@ -4,9 +4,6 @@
 #include <QString>
 #include <QJsonObject>
 
-// Класс "Сумка" - вариант 4
-// Поля: название (string), описание (string),
-//       кол-во слотов (int), максимальный вес (float/double)
 class Bag
 {
 public:
@@ -24,12 +21,9 @@ public:
     void setSlots(int slots) { m_slots = slots; }
     void setMaxWeight(double maxWeight) { m_maxWeight = maxWeight; }
 
-    // Сериализация / десериализация в JSON
     QJsonObject toJson() const;
     static Bag fromJson(const QJsonObject &obj, bool *ok = nullptr);
 
-    // Объект считается "битым", если хотя бы одно поле
-    // не заполнено или не соответствует условию
     bool isValid() const;
 
 private:
