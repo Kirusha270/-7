@@ -133,15 +133,17 @@ void MainWindow::onLoadPhoto()
 
 bool MainWindow::validateFields(QString &error)
 {
-
+    // Имя: только буквы (латиница или кириллица) – без проверки регистра
     QRegularExpression nameRegex("^[A-Za-zА-Яа-я]+$");
     if (!nameRegex.match(m_nameEdit->text()).hasMatch()) {
         error = "Имя должно содержать только буквы.";
         return false;
     }
 
-    if (!nameRegex.match(m_surnameEdit->text()).hasMatch()) {
-        error = "Фамилия должна содержать только буквы.";
+    // Фамилия: первая буква заглавная, остальные строчные, только буквы
+    QRegularExpression surnameRegex("^[A-ZА-Я][a-zа-я]*$");
+    if (!surnameRegex.match(m_surnameEdit->text()).hasMatch()) {
+        error = "Фамилия должна начинаться с заглавной буквы и содержать только буквы (строчные после первой).";
         return false;
     }
 
@@ -157,7 +159,8 @@ bool MainWindow::validateFields(QString &error)
         return false;
     }
 
-    QRegularExpression emailRegex(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
+    // Email: строгий regex – домен не должен содержать точек внутри (кроме последней перед TLD)
+    QRegularExpression emailRegex(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$)");
     if (!emailRegex.match(m_emailEdit->text()).hasMatch()) {
         error = "Введите корректный email.";
         return false;
@@ -229,7 +232,6 @@ bool MainWindow::saveUserData(const QString &nick,
     QString userDirPath = accountsDirPath + "/" + nick;
     QDir userDir(userDirPath);
     if (userDir.exists()) {
-        // Теоретически не должно случиться, т.к. проверяли занятость, но на всякий случай
         QMessageBox::critical(this, "Ошибка", "Папка пользователя уже существует.");
         return false;
     }
@@ -243,7 +245,6 @@ bool MainWindow::saveUserData(const QString &nick,
         QString ext = QFileInfo(photoSource).suffix();
         QString destPhoto = userDirPath + "/avatar." + ext;
         if (!QFile::copy(photoSource, destPhoto)) {
-            // Если не скопировалось, используем стандартное
             copyDefaultPhoto(userDirPath);
         }
     } else {
@@ -257,7 +258,6 @@ bool MainWindow::saveUserData(const QString &nick,
     json["nickname"] = nick;
     json["email"] = email;
     json["id_key"] = idKey;
-    // сервер? Можно добавить, но не обязательно, добавим для полноты
     json["server"] = m_serverCombo->currentText();
 
     QJsonDocument doc(json);
