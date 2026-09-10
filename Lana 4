@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QLineEdit>
+#include <QCheckBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QString>
@@ -21,7 +22,7 @@ protected:
 private slots:
     void onLoadPhoto();
     void onRegister();
-    void onServerSelected();
+    void onServerChecked(bool checked);
 
 private:
     QLineEdit *m_nameEdit;
@@ -31,9 +32,9 @@ private:
     QLineEdit *m_emailEdit;
     QLineEdit *m_idEdit;
 
-    // Хитбоксы серверов вместо QComboBox
-    QList<QPushButton*> m_serverBoxes;
-    QPushButton *m_selectedServer = nullptr;
+    // Чекбоксы серверов
+    QList<QCheckBox*> m_serverChecks;
+    QCheckBox *m_selectedServer = nullptr;
 
     QPushButton *m_loadPhotoBtn;
     QPushButton *m_registerBtn;
@@ -58,7 +59,7 @@ private:
 #endif // MAINWINDOW_H
 #include "MainWindow.h"
 #include <QGridLayout>
-#include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QFileDialog>
@@ -98,23 +99,20 @@ MainWindow::MainWindow(QWidget *parent)
     m_photoLabel->setAlignment(Qt::AlignCenter);
     m_photoLabel->setText("Фото");
 
-    // ---- Хитбоксы серверов ----
+    // ---- Чекбоксы серверов ----
     QStringList servers = {"Сервер 1", "Сервер 2", "Сервер 3"};
-    QHBoxLayout *serverLayout = new QHBoxLayout;
-    serverLayout->setSpacing(6);
+    QVBoxLayout *serverLayout = new QVBoxLayout;
+    serverLayout->setSpacing(4);
 
     for (const QString &srv : servers) {
-        QPushButton *box = new QPushButton(srv, this);
-        box->setCheckable(true);
-        box->setFixedHeight(40);
-        box->setCursor(Qt::PointingHandCursor);
-        box->setProperty("serverBox", true);
-        connect(box, &QPushButton::clicked, this, &MainWindow::onServerSelected);
-        m_serverBoxes.append(box);
-        serverLayout->addWidget(box);
+        QCheckBox *cb = new QCheckBox(srv, this);
+        cb->setProperty("serverCheck", true);
+        connect(cb, &QCheckBox::toggled, this, &MainWindow::onServerChecked);
+        m_serverChecks.append(cb);
+        serverLayout->addWidget(cb);
     }
-    m_serverBoxes.first()->setChecked(true);
-    m_selectedServer = m_serverBoxes.first();
+    m_serverChecks.first()->setChecked(true);
+    m_selectedServer = m_serverChecks.first();
     // ---------------------------
 
     QString style = R"(
@@ -125,21 +123,24 @@ MainWindow::MainWindow(QWidget *parent)
         QPushButton:hover { background-color: #6a6a6a; }
         QPushButton:pressed { background-color: #4a4a4a; }
 
-        QPushButton[serverBox="true"] {
+        QCheckBox[serverCheck="true"] {
+            color: #f0f0f0;
+            spacing: 8px;
+            padding: 4px;
+        }
+        QCheckBox[serverCheck="true"]::indicator {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #777;
+            border-radius: 3px;
             background-color: #3c3c3c;
-            border: 2px solid #555;
-            border-radius: 6px;
-            padding: 8px;
-            font-weight: bold;
         }
-        QPushButton[serverBox="true"]:hover {
+        QCheckBox[serverCheck="true"]::indicator:hover {
             border-color: #8888ff;
-            background-color: #464646;
         }
-        QPushButton[serverBox="true"]:checked {
+        QCheckBox[serverCheck="true"]::indicator:checked {
             background-color: #2f6fbf;
-            border: 2px solid #7fb3ff;
-            color: #ffffff;
+            border-color: #7fb3ff;
         }
     )";
     setStyleSheet(style);
@@ -199,16 +200,26 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     return QMainWindow::eventFilter(obj, event);
 }
 
-void MainWindow::onServerSelected()
+void MainWindow::onServerChecked(bool checked)
 {
-    QPushButton *sender = qobject_cast<QPushButton*>(QObject::sender());
+    QCheckBox *sender = qobject_cast<QCheckBox*>(QObject::sender());
     if (!sender)
         return;
 
-    for (QPushButton *box : m_serverBoxes)
-        box->setChecked(box == sender);
-
-    m_selectedServer = sender;
+    if (checked) {
+        // Взаимоисключение: снимаем галочки с остальных
+        for (QCheckBox *cb : m_serverChecks) {
+            if (cb != sender && cb->isChecked())
+                cb->setChecked(false);
+        }
+        m_selectedServer = sender;
+    } else {
+        // Не разрешаем снять единственную выбранную галочку
+        if (sender == m_selectedServer) {
+            sender->setChecked(true);
+            return;
+        }
+    }
 }
 
 QString MainWindow::currentServer() const
