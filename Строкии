@@ -389,3 +389,42 @@ void Car::writeToFile(QTextStream &out) const
 
     out << "--------------------------------\n";
 }
+bool RegistrationForm::validateFields(QString &errorMessage) const
+{
+    static const QRegularExpression nameRe(
+        "^[A-ZА-ЯЁ][a-zа-яёA-ZА-ЯЁ-]{1,29}$");
+    static const QRegularExpression nicknameRe(
+        "^[A-Za-z0-9_]{3,16}$");
+    static const QRegularExpression emailRe(
+        "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\\.[A-Za-z]{2,}$");
+    static const QRegularExpression passwordRe(
+        "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,32}$");
+    static const QRegularExpression idKeyRe(
+        "^[A-Z]\\d{3}-\\d{2}[A-Z]-[A-Z]$");
+
+    if (!nameRe.match(ui->nameEdit->text()).hasMatch()) {
+        errorMessage = tr("Имя введено неверно."); return false;
+    }
+    if (!nameRe.match(ui->surnameEdit->text()).hasMatch()) {
+        errorMessage = tr("Фамилия введена неверно."); return false;
+    }
+    if (!nicknameRe.match(ui->nicknameEdit->text()).hasMatch()) {
+        errorMessage = tr("Никнейм: 3–16 символов, латинские буквы, цифры и _. "); return false;
+    }
+    if (!idKeyRe.match(ui->idKeyEdit->text()).hasMatch()) {
+        errorMessage = tr("ID-Key должен соответствовать формату A111-11A-A."); return false;
+    }
+    if (!emailRe.match(ui->emailEdit->text()).hasMatch()) {
+        errorMessage = tr("Почта введена неверно."); return false;
+    }
+    if (!passwordRe.match(ui->passwordEdit->text()).hasMatch()) {
+        errorMessage = tr("Пароль должен содержать 8–32 символа, заглавную и строчную буквы, цифру и спецсимвол.");
+        return false;
+    }
+    if (!ui->serverEuropeCheck->isChecked() &&
+        !ui->serverAsiaCheck->isChecked() &&
+        !ui->serverAmericaCheck->isChecked()) {
+        errorMessage = tr("Выберите хотя бы один сервер."); return false;
+    }
+    return true;
+}
