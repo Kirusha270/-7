@@ -2,42 +2,63 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QLineEdit>
-#include <QRadioButton>
-#include <QCheckBox>
-#include <QPushButton>
+#include <QString>
 
+class QLineEdit;
+class QRadioButton;
+class QCheckBox;
+class QPushButton;
+
+// ---------- Класс данных ----------
+struct Car {
+    QString brand;              // марка
+    QString model;              // модель
+    int     year;               // год выпуска
+    QString plate;              // гос номер
+    QString fuel;               // топливо ("Бензин"/"Дизель"/)
+    bool    heatedSeats  = false;   // подогрев сидений
+    bool    parkingAids  = false;   // парктроники
+    bool    floorMats    = false;   // коврики
+
+    Car() : year(0) {}
+
+    Car(const QString& b, const QString& m, int y,
+        const QString& p, const QString& f,
+        bool hs, bool pa, bool fm)
+        : brand(b), model(m), year(y), plate(p), fuel(f),
+        heatedSeats(hs), parkingAids(pa), floorMats(fm) {}
+
+    // Метод записи в файл (дозапись, UTF-8)
+    bool writeToFile(const QString& fileName) const;
+};
+
+// ---------- Окно ----------
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() = default;
 
 private slots:
-    void onReset();
-    void onSave();
+    void onSaveClicked();
+    void onResetClicked();
 
 private:
-    // Поля ввода
-    QLineEdit *m_brandEdit;
-    QLineEdit *m_modelEdit;
-    QLineEdit *m_yearEdit;
-    QLineEdit *m_plateEdit;
+    QLineEdit*    brandEdit     = nullptr;
+    QLineEdit*    modelEdit     = nullptr;
+    QLineEdit*    yearEdit      = nullptr;
+    QLineEdit*    plateEdit     = nullptr;
+    QRadioButton* petrolRadio   = nullptr;
+    QRadioButton* dieselRadio   = nullptr;
+    QCheckBox*    heatedSeatsCb = nullptr;
+    QCheckBox*    parkingAidsCb = nullptr;
+    QCheckBox*    floorMatsCb   = nullptr;
+    QPushButton*  saveButton    = nullptr;
+    QPushButton*  resetButton   = nullptr;
 
-    // Радиокнопки двигателя
-    QRadioButton *m_petrolRadio;
-    QRadioButton *m_dieselRadio;
-
-    // Чекбоксы опций
-    QCheckBox *m_heatedSeatsCheck;
-    QCheckBox *m_parkingSensorsCheck;
-    QCheckBox *m_matsCheck;
-
-    // Кнопки
-    QPushButton *m_resetBtn;
-    QPushButton *m_saveBtn;
+    void resetForm();
 };
 
 #endif // MAINWINDOW_H
