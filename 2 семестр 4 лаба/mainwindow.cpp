@@ -1,176 +1,229 @@
 #include "mainwindow.h"
-#include "car.h"
 
+#include <QWidget>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QRadioButton>
+#include <QCheckBox>
+#include <QPushButton>
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QFile>
 #include <QTextStream>
+#include <QStringConverter>
 
+bool Car::writeToFile(const QString& fileName) const
+{
+    QFile file(fileName);
+    if (!file.open(QIODevice::Append | QIODevice::Text))
+        return false;
+
+    QTextStream out(&file);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    out.setCodec("UTF-8");
+#else
+    out.setEncoding(QStringConverter::Utf8);
+#endif
+
+    auto yesNo = [](bool v) {
+        return v ? QStringLiteral("Да") : QStringLiteral("Нет");
+    };
+
+    out << "Марка:            " << brand << '\n'
+        << "Модель:           " << model << '\n'
+        << "Год выпуска:      " << year  << '\n'
+        << "Гос номер:        " << plate << '\n'
+        << "Топливо:          " << (fuel.isEmpty() ? QStringLiteral("—") : fuel) << '\n'
+        << "Подогрев сидений: " << yesNo(heatedSeats) << '\n'
+        << "Парктроники:      " << yesNo(parkingAids) << '\n'
+        << "Коврики:          " << yesNo(floorMats)   << '\n'
+        << "----------------------------------------\n";
+
+    file.close();
+    return true;
+}
+
+// ==================== Конструктор окна ====================
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    resize(550, 600); // увеличенное окно
-    setWindowTitle("Автомобиль");
-    QWidget *central = new QWidget(this);
+    auto* central = new QWidget(this);
     setCentralWidget(central);
 
-    // Поля ввода
-    m_brandEdit = new QLineEdit;
-    m_modelEdit = new QLineEdit;
-    m_yearEdit = new QLineEdit;
-    m_plateEdit = new QLineEdit;
+    auto* form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight);
 
-    // Двигатель (радио) – изначально ни один не выбран
-    m_petrolRadio = new QRadioButton("Бензин");
-    m_dieselRadio = new QRadioButton("Дизель");
-    m_petrolRadio->setAutoExclusive(false);
-    m_dieselRadio->setAutoExclusive(false);
-    m_petrolRadio->setChecked(false);
-    m_dieselRadio->setChecked(false);
-    m_petrolRadio->setAutoExclusive(true);
-    m_dieselRadio->setAutoExclusive(true);
+    brandEdit = new QLineEdit;
+    brandEdit->setPlaceholderText("Только заглавные буквы, напр. LADA или ВАЗ");
+    form->addRow("Марка:", brandEdit);
 
-    QHBoxLayout *engineLayout = new QHBoxLayout;
-    engineLayout->addWidget(m_petrolRadio);
-    engineLayout->addWidget(m_dieselRadio);
-    engineLayout->addStretch();
+    modelEdit = new QLineEdit;
+    modelEdit->setPlaceholderText("Например: Vesta");
+    form->addRow("Модель:", modelEdit);
 
-    // Опции
-    m_heatedSeatsCheck = new QCheckBox("Подогрев сидений");
-    m_parkingSensorsCheck = new QCheckBox("Парктроники");
-    m_matsCheck = new QCheckBox("Коврики");
+    yearEdit = new QLineEdit;
+    yearEdit->setPlaceholderText("Например: 2020");
+    form->addRow("Год выпуска:", yearEdit);
 
-    QVBoxLayout *optionsLayout = new QVBoxLayout;
-    optionsLayout->addWidget(m_heatedSeatsCheck);
-    optionsLayout->addWidget(m_parkingSensorsCheck);
-    optionsLayout->addWidget(m_matsCheck);
+    plateEdit = new QLineEdit;
+    plateEdit->setPlaceholderText("Например: А111АА22 или А111АА101");
+    form->addRow("Гос номер:", plateEdit);
 
-    QGroupBox *optionsGroup = new QGroupBox("Опции");
-    optionsGroup->setLayout(optionsLayout);
+    auto* fuelBox    = new QGroupBox("Топливо");
+    auto* fuelLayout = new QHBoxLayout(fuelBox);
+    petrolRadio = new QRadioButton("Бензин");
+    dieselRadio = new QRadioButton("Дизель");
+    fuelLayout->addWidget(petrolRadio);
+    fuelLayout->addWidget(dieselRadio);
+    fuelLayout->addStretch();
+    form->addRow(fuelBox);
 
-    // Кнопки
-    m_resetBtn = new QPushButton("Сброс");
-    m_saveBtn = new QPushButton("Сохранить");
+    auto* optBox    = new QGroupBox("Опции");
+    auto* optLayout = new QVBoxLayout(optBox);
+    heatedSeatsCb = new QCheckBox("Подогрев сидений");
+    parkingAidsCb = new QCheckBox("Парктроники");
+    floorMatsCb   = new QCheckBox("Коврики");
+    optLayout->addWidget(heatedSeatsCb);
+    optLayout->addWidget(parkingAidsCb);
+    optLayout->addWidget(floorMatsCb);
+    form->addRow(optBox);
 
-    QHBoxLayout *buttonLayout = new QHBoxLayout;
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(m_resetBtn);
-    buttonLayout->addWidget(m_saveBtn);
 
-    // Основная компоновка
-    QFormLayout *formLayout = new QFormLayout;
-    formLayout->addRow("Марка:", m_brandEdit);
-    formLayout->addRow("Модель:", m_modelEdit);
-    formLayout->addRow("Год выпуска:", m_yearEdit);
-    formLayout->addRow("Гос. номер:", m_plateEdit);
-    formLayout->addRow("Двигатель:", engineLayout);
-    formLayout->addRow(optionsGroup);
-    formLayout->addRow(buttonLayout);
+    saveButton  = new QPushButton("Сохранить");
+    resetButton = new QPushButton("Сброс");
 
-    central->setLayout(formLayout);
+    auto* btnLayout = new QHBoxLayout;
+    btnLayout->addStretch();
+    btnLayout->addWidget(saveButton);
+    btnLayout->addWidget(resetButton);
 
-    connect(m_resetBtn, &QPushButton::clicked, this, &MainWindow::onReset);
-    connect(m_saveBtn, &QPushButton::clicked, this, &MainWindow::onSave);
+    auto* mainLayout = new QVBoxLayout(central);
+    mainLayout->addLayout(form);
+    mainLayout->addSpacing(10);
+    mainLayout->addLayout(btnLayout);
+
+    connect(saveButton,  &QPushButton::clicked, this, &MainWindow::onSaveClicked);
+    connect(resetButton, &QPushButton::clicked, this, &MainWindow::onResetClicked);
+
+    setWindowTitle("Автомобиль — форма ввода");
+    resize(500, 460);
 }
 
-MainWindow::~MainWindow() = default;
 
-void MainWindow::onReset()
+void MainWindow::resetForm()
 {
-    m_brandEdit->clear();
-    m_modelEdit->clear();
-    m_yearEdit->clear();
-    m_plateEdit->clear();
+    brandEdit->clear();
+    modelEdit->clear();
+    yearEdit->clear();
+    plateEdit->clear();
 
-    m_petrolRadio->setAutoExclusive(false);
-    m_dieselRadio->setAutoExclusive(false);
-    m_petrolRadio->setChecked(false);
-    m_dieselRadio->setChecked(false);
-    m_petrolRadio->setAutoExclusive(true);
-    m_dieselRadio->setAutoExclusive(true);
+    petrolRadio->setAutoExclusive(false);
+    dieselRadio->setAutoExclusive(false);
+    petrolRadio->setChecked(false);
+    dieselRadio->setChecked(false);
+    petrolRadio->setAutoExclusive(true);
+    dieselRadio->setAutoExclusive(true);
 
-    m_heatedSeatsCheck->setChecked(false);
-    m_parkingSensorsCheck->setChecked(false);
-    m_matsCheck->setChecked(false);
+    heatedSeatsCb->setChecked(false);
+    parkingAidsCb->setChecked(false);
+    floorMatsCb->setChecked(false);
+
+    brandEdit->setFocus();
 }
 
-void MainWindow::onSave()
+
+void MainWindow::onResetClicked()
 {
-    QString brand = m_brandEdit->text().trimmed();
-    QString model = m_modelEdit->text().trimmed();
-    QString year = m_yearEdit->text().trimmed();
-    QString plate = m_plateEdit->text().trimmed().toUpper();
+    resetForm();
+}
 
-    bool petrol = m_petrolRadio->isChecked();
-    bool diesel = m_dieselRadio->isChecked();
-    bool heated = m_heatedSeatsCheck->isChecked();
-    bool parking = m_parkingSensorsCheck->isChecked();
-    bool mats = m_matsCheck->isChecked();
 
-    bool ok = true;
-    QString errorMsg;
+void MainWindow::onSaveClicked()
+{
+    const QString brand   = brandEdit->text().trimmed();
+    const QString model   = modelEdit->text().trimmed();
+    const QString yearStr = yearEdit->text().trimmed();
+    const QString plate   = plateEdit->text().trimmed();
 
-    // 1. Марка: только заглавные буквы (англ или рус)
-    QRegularExpression nameRx("^[A-ZА-Я]+$");
-    if (brand.isEmpty() || !nameRx.match(brand).hasMatch()) {
-        ok = false;
-        errorMsg = "Марка: должна быть не пустой и содержать только заглавные буквы (A-Z, А-Я)";
-    }
-    // 2. Модель: только не пустая (без ограничений на символы)
-    else if (model.isEmpty()) {
-        ok = false;
-        errorMsg = "Модель: не должна быть пустой";
-    }
-    // 3. Год: 4 цифры, первая не ноль
-    else if (!QRegularExpression("^[1-9]\\d{3}$").match(year).hasMatch()) {
-        ok = false;
-        errorMsg = "Год выпуска: должен быть четырёхзначным числом, начинающимся с цифры от 1 до 9";
-    }
-    // 4. Госномер: поддержка русских и латинских букв
-    else {
-        QString validChars = "АAВBЕEКKМMНHОOРPСCТTУYХX";
-        QString pattern1 = "^[" + validChars + "]\\d{3}[" + validChars + "]{2}\\d{2}$";
-        QString pattern2 = "^[" + validChars + "]\\d{3}[" + validChars + "]{2}\\d{3}$";
-        QRegularExpression rx1(pattern1);
-        QRegularExpression rx2(pattern2);
 
-        if (!rx1.match(plate).hasMatch() && !rx2.match(plate).hasMatch()) {
-            ok = false;
-            errorMsg = "Гос. номер: должен быть формата A111AA22 или A111AA222 (буквы из допустимого набора)";
-        } else if (rx2.match(plate).hasMatch()) {
-            QString region = plate.mid(6, 3);
-            if (region != "101" && region != "111") {
-                ok = false;
-                errorMsg = "Гос. номер: для трёхзначного региона допустимы только 101 или 111";
-            }
-        }
+    if (brand.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Поле «Марка» обязательно для заполнения.");
+        brandEdit->setFocus();
+        return;
     }
-    // 5. Двигатель: обязательно выбран
-    if (ok && !petrol && !diesel) {
-        ok = false;
-        errorMsg = "Двигатель: необходимо выбрать Бензин или Дизель";
-    }
-
-    if (!ok) {
-        QMessageBox::critical(this, "Ошибка", errorMsg);
+    static const QRegularExpression brandRe(QStringLiteral("^[A-ZА-ЯЁ]+$"));
+    if (!brandRe.match(brand).hasMatch()) {
+        QMessageBox::warning(this, "Ошибка",
+                             "Поле «Марка»: допускаются только заглавные буквы "
+                             "английского или русского алфавита (без пробелов и цифр).");
+        brandEdit->setFocus();
         return;
     }
 
-    Car car(brand, model, year, plate, petrol, diesel,
-            heated, parking, mats);
 
-    QFile file("result.txt");
-    if (!file.open(QIODevice::Append | QIODevice::Text)) {
-        QMessageBox::critical(this, "Ошибка", "Не удалось открыть файл для записи");
+    if (model.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Поле «Модель» обязательно для заполнения.");
+        modelEdit->setFocus();
         return;
     }
-    QTextStream out(&file);
-    car.writeToFile(out);
-    file.close();
 
-    QMessageBox::information(this, "Успех", "Данные сохранены в result.txt");
+
+    if (yearStr.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Поле «Год выпуска» обязательно для заполнения.");
+        yearEdit->setFocus();
+        return;
+    }
+    static const QRegularExpression yearRe(QStringLiteral("^[1-9]\\d{3}$"));
+    if (!yearRe.match(yearStr).hasMatch()) {
+        QMessageBox::warning(this, "Ошибка",
+                             "Поле «Год выпуска»: должно содержать ровно 4 цифры, "
+                             "причём первая цифра не может быть нулём.");
+        yearEdit->setFocus();
+        return;
+    }
+
+
+    if (plate.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Поле «Гос номер» обязательно для заполнения.");
+        plateEdit->setFocus();
+        return;
+    }
+    const QString letters =
+        QStringLiteral("АВЕКМНОРСТУХавекмнорстухABEKMHOPCTYXabekmhopctyx");
+    const QRegularExpression plateRe(
+        QStringLiteral("^[%1]\\d{3}[%1]{2}(\\d{2}|101|111)$").arg(letters));
+
+    if (!plateRe.match(plate).hasMatch()) {
+        QMessageBox::warning(this, "Ошибка",
+                             "Поле «Гос номер»: неверный формат.\n\n"
+                             "Буквы — только из набора АВЕКМНОРСТУХ "
+                             "(либо латинские A,B,E,K,M,H,O,P,C,T,Y,X), в любом регистре.\n"
+                             "Регион: любые две цифры, либо строго 101 или 111.");
+        plateEdit->setFocus();
+        return;
+    }
+
+    QString fuel;
+    if (petrolRadio->isChecked())      fuel = QStringLiteral("Бензин");
+    else if (dieselRadio->isChecked()) fuel = QStringLiteral("Дизель");
+
+
+    Car car(brand, model, yearStr.toInt(), plate, fuel,
+            heatedSeatsCb->isChecked(),
+            parkingAidsCb->isChecked(),
+            floorMatsCb->isChecked());
+
+    if (!car.writeToFile(QStringLiteral("result.txt"))) {
+        QMessageBox::critical(this, "Ошибка",
+                              "Не удалось записать данные в файл «result.txt».");
+        return;
+    }
+
+    QMessageBox::information(this, "Успех",
+                             "Данные успешно сохранены в файл «result.txt».");
+    resetForm();
 }
