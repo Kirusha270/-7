@@ -127,23 +127,47 @@ void MainWindow::setupUi()
 
     auto* label = new QLabel(QString::fromUtf8(
         "Введите строку (не более 50 символов, без латиницы):"));
-    label->setStyleSheet("color: #ffffff;");
+    label->setStyleSheet(
+        "color: #cccccc; font-family: Consolas; font-size: 10pt;");
     layout->addWidget(label);
 
     auto* inputRow = new QHBoxLayout;
+    inputRow->setSpacing(6);
+
+    auto* prompt = new QLabel(">");
+    prompt->setStyleSheet(
+        "color: #00ff00; font-family: Consolas; font-size: 14pt; "
+        "font-weight: bold;");
+    inputRow->addWidget(prompt);
+
     m_inputEdit = new QLineEdit;
     m_inputEdit->setMaxLength(50);
     m_inputEdit->setPlaceholderText(
-        QString::fromUtf8("Например: Привет, мир! 42"));
+        QString::fromUtf8("введите текст и нажмите Enter"));
     m_inputEdit->setStyleSheet(
-        "QLineEdit { background-color: #111111; color: #ffffff; "
-        "border: 1px solid #444444; padding: 4px; }");
+        "QLineEdit {"
+        "  background-color: #000000;"
+        "  color: #00ff00;"
+        "  border: none;"
+        "  font-family: Consolas;"
+        "  font-size: 14pt;"
+        "  selection-background-color: #005500;"
+        "  selection-color: #ffffff;"
+        "}");
+    m_inputEdit->setCursor(Qt::IBeamCursor);
 
     m_processBtn = new QPushButton(QString::fromUtf8("Обработать"));
     m_processBtn->setStyleSheet(
-        "QPushButton { background-color: #222222; color: #ffffff; "
-        "border: 1px solid #555555; padding: 6px 14px; }"
-        "QPushButton:hover { background-color: #333333; }");
+        "QPushButton {"
+        "  background-color: #111111;"
+        "  color: #00ff00;"
+        "  border: 1px solid #00ff00;"
+        "  font-family: Consolas;"
+        "  font-size: 11pt;"
+        "  padding: 6px 14px;"
+        "}"
+        "QPushButton:hover { background-color: #003300; }"
+        "QPushButton:pressed { background-color: #005500; }");
 
     inputRow->addWidget(m_inputEdit, 1);
     inputRow->addWidget(m_processBtn);
@@ -153,12 +177,20 @@ void MainWindow::setupUi()
     m_outputEdit->setReadOnly(true);
     m_outputEdit->setFontFamily("Consolas");
     m_outputEdit->setStyleSheet(
-        "QTextEdit { background-color: #000000; color: #ffffff; "
-        "border: 1px solid #333333; }");
+        "QTextEdit {"
+        "  background-color: #000000;"
+        "  color: #00ff00;"
+        "  border: 1px solid #003300;"
+        "  font-family: Consolas;"
+        "  font-size: 11pt;"
+        "  padding: 6px;"
+        "}");
     layout->addWidget(m_outputEdit, 1);
 
     connect(m_processBtn, &QPushButton::clicked, this, &MainWindow::onProcessClicked);
     connect(m_inputEdit,  &QLineEdit::returnPressed, this, &MainWindow::onProcessClicked);
+
+    m_inputEdit->setFocus();
 }
 
 QVector<QVector<QChar>> MainWindow::buildJaggedVector(const QString& s) const
@@ -287,11 +319,11 @@ void MainWindow::onProcessClicked()
         "знаки — жёлтые; белым — символы, которых нет в зубчатом массиве.\n");
 
     QString html;
-    html += "<div style=\"background-color:#000000; color:#ffffff; "
+    html += "<div style=\"background-color:#000000; color:#00ff00; "
             "font-family:Consolas,monospace; white-space:pre-wrap;\">";
-    html += QString("<pre style=\"color:#ffffff; margin:0;\">")
+    html += QString("<pre style=\"color:#00ff00; margin:0;\">")
             + report.toHtmlEscaped() + "</pre>";
-    html += "<hr style=\"border-color:#333333;\">";
+    html += "<hr style=\"border-color:#003300;\">";
     html += "<div style=\"font-size:14pt; white-space:pre-wrap;\">";
     html += coloredHtml(m_result);
     html += "</div></div>";
