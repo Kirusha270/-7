@@ -248,3 +248,53 @@ void MainWindow::onProcessClicked()
 
     freeJaggedMalloc(jm);
 }
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QMainWindow>
+#include <QVector>
+#include <QSet>
+#include <QString>
+
+class QLineEdit;
+class QPushButton;
+class QTextEdit;
+
+// ============================================================
+//  Структура "зубчатого массива" на чистом C (malloc/realloc)
+// ============================================================
+struct JaggedMalloc {
+    char** rows = nullptr;   // массив указателей на строки
+    int*   lens = nullptr;   // длины строк в байтах
+    int    n    = 4;         // количество строк
+};
+
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
+
+private slots:
+    void onProcessClicked();
+
+private:
+    void setupUi();
+
+    QVector<QVector<QChar>> buildJaggedVector(const QString& s) const;
+    JaggedMalloc            buildJaggedMalloc(const QString& s) const;
+    void                    freeJaggedMalloc(JaggedMalloc& j) const;
+    QString                 coloredHtml(const QString& s) const;
+
+    QLineEdit*   m_inputEdit   = nullptr;
+    QPushButton* m_processBtn  = nullptr;
+    QTextEdit*   m_outputEdit  = nullptr;
+
+    QString m_input;
+    QString m_result;
+    QVector<QVector<QChar>> m_rowsVec;
+};
+
+#endif // MAINWINDOW_H
