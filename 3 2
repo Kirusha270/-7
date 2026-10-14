@@ -1,374 +1,266 @@
-// ============================================================
-//  Лабораторная работа №2. Зубчатые массивы. Вариант 3.
-//  Visual Studio, C++17, ключи: /utf-8
-// ============================================================
-
 #pragma execution_character_set("utf-8")
 
 #include <iostream>
 #include <string>
 #include <vector>
-#include <set>
 #include <algorithm>
-#include <cmath>
-#include <cstdlib>
-#include <cstring>
-#include <cstdint>
+#include <fstream>
+#include <sstream>
+#include <locale>
 
 #ifdef _WIN32
 #include <windows.h>
-#include <io.h>
-#include <fcntl.h>
 #endif
 
 using namespace std;
 
-// ==================== UTF-8 утилиты ====================
-static uint32_t decodeUtf8(const string& s, size_t i, size_t& len) {
-    unsigned char c = (unsigned char)s[i];
-    if (c < 0x80) { len = 1; return c; }
-    if ((c & 0xE0) == 0xC0) { len = 2; return ((c & 0x1Fu) << 6) | ((unsigned char)s[i + 1] & 0x3Fu); }
-    if ((c & 0xF0) == 0xE0) { len = 3; return ((c & 0x0Fu) << 12) | (((unsigned char)s[i + 1] & 0x3Fu) << 6) | ((unsigned char)s[i + 2] & 0x3Fu); }
-    if ((c & 0xF8) == 0xF0) { len = 4; return ((c & 0x07u) << 18) | (((unsigned char)s[i + 1] & 0x3Fu) << 12) | (((unsigned char)s[i + 2] & 0x3Fu) << 6) | ((unsigned char)s[i + 3] & 0x3Fu); }
-    len = 1; return c;
-}
-
-static string encodeUtf8(uint32_t cp) {
-    string r;
-    if (cp < 0x80) r += (char)cp;
-    else if (cp < 0x800) { r += (char)(0xC0 | (cp >> 6)); r += (char)(0x80 | (cp & 0x3F)); }
-    else if (cp < 0x10000) { r += (char)(0xE0 | (cp >> 12)); r += (char)(0x80 | ((cp >> 6) & 0x3F)); r += (char)(0x80 | (cp & 0x3F)); }
-    else { r += (char)(0xF0 | (cp >> 18)); r += (char)(0x80 | ((cp >> 12) & 0x3F)); r += (char)(0x80 | ((cp >> 6) & 0x3F)); r += (char)(0x80 | (cp & 0x3F)); }
-    return r;
-}
-
-struct Char {
-    uint32_t cp;
-    string   utf8;
-};
-
-static vector<Char> splitUtf8(const string& s) {
-    vector<Char> out;
-    size_t i = 0;
-    while (i < s.size()) {
-        size_t len;
-        uint32_t cp = decodeUtf8(s, i, len);
-        out.push_back({ cp, s.substr(i, len) });
-        i += len;
-    }
-    return out;
-}
-
-static string joinUtf8(const vector<Char>& v) {
-    string r;
-    for (const auto& c : v) r += c.utf8;
-    return r;
-}
-
-#ifdef _WIN32
-static string wideToUtf8(const wstring& w) {
-    if (w.empty()) return {};
-    int size = WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(),
-        nullptr, 0, nullptr, nullptr);
-    string out(size, 0);
-    WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(),
-        &out[0], size, nullptr, nullptr);
-    return out;
-}
-#endif
-
-static string readLineUtf8() {
-#ifdef _WIN32
-    wstring wline;
-    getline(wcin, wline);
-    return wideToUtf8(wline);
-#else
-    string line;
-    getline(cin, line);
-    return line;
-#endif
-}
-
-// ==================== Категории символов ====================
-enum Cat { CAT_VOWEL = 0, CAT_CONSONANT = 1, CAT_DIGIT = 2, CAT_SIGN = 3 };
-
-static uint32_t lowerCp(uint32_t cp) {
-    if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;  // А..Я -> а..я
-    if (cp == 0x0401) return 0x0451;                     // Ё -> ё
-    if (cp >= 'A' && cp <= 'Z') return cp + 0x20;
-    return cp;
-}
-
-static int categoryOf(uint32_t cp) {
-    uint32_t lc = lowerCp(cp);
-    switch (lc) {
-    case 0x0430: case 0x0435: case 0x0451: case 0x0438:
-    case 0x043E: case 0x0443: case 0x044B: case 0x044D:
-    case 0x044E: case 0x044F:
-        return CAT_VOWEL;
-    case 0x0431: case 0x0432: case 0x0433: case 0x0434:
-    case 0x0436: case 0x0437: case 0x0439: case 0x043A:
-    case 0x043B: case 0x043C: case 0x043D: case 0x043F:
-    case 0x0440: case 0x0441: case 0x0442: case 0x0444:
-    case 0x0445: case 0x0446: case 0x0447: case 0x0448:
-    case 0x0449:
-        return CAT_CONSONANT;
-    }
-    if (lc >= '0' && lc <= '9') return CAT_DIGIT;
-    return CAT_SIGN;
-}
-
-static const char* categoryName(int cat) {
-    switch (cat) {
-    case CAT_VOWEL:     return "Гласные";
-    case CAT_CONSONANT: return "Согласные";
-    case CAT_DIGIT:     return "Цифры";
-    default:            return "Знаки";
-    }
-}
-
-static const char* colorFor(int cat) {
-    switch (cat) {
-    case CAT_VOWEL:     return "\033[91m";
-    case CAT_CONSONANT: return "\033[94m";
-    case CAT_DIGIT:     return "\033[92m";
-    default:            return "\033[93m";
-    }
-}
-static const char* kReset = "\033[0m";
-static const char* kWhite = "\033[97m";
-
-// ============================================================
-//  Класс JaggedArray — объектная обёртка зубчатого массива
-// ============================================================
 class JaggedArray {
+private:
+    vector<vector<string>> a;
+
 public:
-    JaggedArray() : rows(4) {}
-
-    // --- Переопределение обращения по индексам A[i][j] ---
-    vector<Char>& operator[](int i) { return rows[i]; }
-    const vector<Char>& operator[](int i) const { return rows[i]; }
-
-    int rowCount()        const { return (int)rows.size(); }
-    int rowSize(int i)    const { return (int)rows[i].size(); }
-    bool empty()          const {
-        for (const auto& r : rows) if (!r.empty()) return false;
-        return true;
+    vector<string>& operator[](int i) {
+        return a.at(i);
     }
 
-    // --- Добавление с автоматическим определением категории и нижним регистром ---
-    bool add(const Char& ch) {
-        if (ch.cp == '@') return false;
-        uint32_t lc = lowerCp(ch.cp);
-        int cat = categoryOf(lc);
-        for (const auto& c : rows[cat])
-            if (c.cp == lc) return false;         // уже есть — не добавляем
-        rows[cat].push_back({ lc, encodeUtf8(lc) });
-        return true;
+    const vector<string>& operator[](int i) const {
+        return a.at(i);
     }
 
-    // --- Удаление по двойному индексу delete(строка, номер) ---
-    bool removeAt(int rowIdx, int colIdx) {
-        if (rowIdx < 0 || rowIdx >= (int)rows.size()) return false;
-        if (colIdx < 0 || colIdx >= (int)rows[rowIdx].size()) return false;
-        rows[rowIdx].erase(rows[rowIdx].begin() + colIdx);
-        return true;
+    int size() const {
+        return (int)a.size();
     }
 
-    // --- Удаление по значению delete(item) ---
-    bool removeByValue(uint32_t cp) {
-        uint32_t lc = lowerCp(cp);
-        bool removed = false;
-        for (auto& row : rows) {
-            for (auto it = row.begin(); it != row.end(); ) {
-                if (it->cp == lc) { it = row.erase(it); removed = true; }
-                else ++it;
+    void add_endline(int k, const string& item) {
+        if (k >= 0 && k < size())
+            a[k].push_back(item);
+        else
+            cout << "Такой строки нет.\n";
+    }
+
+    void deleteItem(int i, int j) {
+        if (i >= 0 && i < size() &&
+            j >= 0 && j < (int)a[i].size()) {
+            a[i].erase(a[i].begin() + j);
+            cout << "Элемент удален.\n";
+        }
+        else {
+            cout << "Неверные индексы.\n";
+        }
+    }
+
+    void deleteItem(const string& item) {
+        bool found = false;
+
+        for (auto& row : a) {
+            auto it = remove(row.begin(), row.end(), item);
+
+            if (it != row.end()) {
+                row.erase(it, row.end());
+                found = true;
             }
         }
-        return removed;
-    }
-    bool removeByValue(const string& utf8Char) {
-        auto v = splitUtf8(utf8Char);
-        if (v.empty()) return false;
-        return removeByValue(v[0].cp);
+
+        if (found)
+            cout << "Элементы удалены.\n";
+        else
+            cout << "Такого элемента нет.\n";
     }
 
-    // --- Просмотр массива (каждая строка своим цветом) ---
-    void print(const string& title) const {
-        cout << title << ":\n";
-        for (int i = 0; i < (int)rows.size(); ++i) {
-            cout << "  " << colorFor(i)
-                << categoryName(i)
-                << " [" << rows[i].size() << "]: ";
-            for (const auto& c : rows[i])
-                cout << c.utf8 << ' ';
-            cout << kReset << '\n';
-        }
-    }
-
-    // --- Сортировка внутри каждой строки (по коду символа) ---
     void sortRows() {
-        for (auto& row : rows) {
-            sort(row.begin(), row.end(),
-                [](const Char& a, const Char& b) { return a.cp < b.cp; });
-        }
+        for (auto& row : a)
+            sort(row.begin(), row.end());
+
+        cout << "Строки отсортированы.\n";
     }
 
-    // --- Оператор "-" : построчное удаление дубликатов из первого массива ---
-    //     A - B  ->  из A удаляются те элементы, которые есть в B (по строкам)
-    JaggedArray operator-(const JaggedArray& other) const {
-        JaggedArray result;
-        for (int i = 0; i < (int)rows.size(); ++i) {
-            for (const auto& c : rows[i]) {
-                bool found = false;
-                for (const auto& o : other.rows[i])
-                    if (o.cp == c.cp) { found = true; break; }
-                if (!found) result.rows[i].push_back(c);
+    JaggedArray operator-(const JaggedArray& b) const {
+        JaggedArray c = *this;
+
+        for (auto& row : c.a) {
+            vector<string> t;
+
+            for (const auto& s : row) {
+                if (find(t.begin(), t.end(), s) == t.end())
+                    t.push_back(s);
+            }
+
+            row = t;
+        }
+
+        return c;
+    }
+
+    JaggedArray& operator--() {
+        for (auto& row : a) {
+            for (auto& s : row) {
+                string t;
+
+                for (unsigned char c : s) {
+                    if (c < '0' || c > '9')
+                        t += c;
+                }
+
+                s = t;
             }
         }
-        return result;
-    }
 
-    // --- Оператор "--" : для чисел — извлечение корня,
-    //                     для символов — сдвиг всех символов по их коду ---
-    JaggedArray& operator--() {                 // префиксный --A
-        applyDecrement();
         return *this;
     }
-    JaggedArray operator--(int) {               // постфиксный A--
-        JaggedArray copy = *this;
-        applyDecrement();
-        return copy;
+
+    void print() const {
+        const char* colors[] = {
+            "\033[91m",
+            "\033[92m",
+            "\033[93m",
+            "\033[94m",
+            "\033[95m",
+            "\033[96m"
+        };
+
+        for (int i = 0; i < size(); i++) {
+            cout << colors[i % 6];
+            cout << "Строка " << i << ": ";
+
+            for (const auto& s : a[i])
+                cout << "[" << s << "] ";
+
+            cout << "\033[0m\n";
+        }
     }
 
-private:
-    vector<vector<Char>> rows;
+    bool load(const string& name) {
+        ifstream f(name);
 
-    void applyDecrement() {
-        for (int i = 0; i < (int)rows.size(); ++i) {
-            for (auto& c : rows[i]) {
-                if (i == CAT_DIGIT) {
-                    // для цифр — извлекаем квадратный корень
-                    if (c.cp >= '0' && c.cp <= '9') {
-                        int v = (int)(c.cp - '0');
-                        int root = (int)lround(sqrt((double)v));
-                        c.cp = (uint32_t)('0' + root);
-                        c.utf8 = string(1, (char)c.cp);
-                    }
-                }
-                else {
-                    // для символов — сдвиг по коду (+1 к кодпоинту)
-                    c.cp = c.cp + 1;
-                    c.utf8 = encodeUtf8(c.cp);
-                }
+        if (!f.is_open())
+            return false;
+
+        a.clear();
+
+        string s;
+
+        while (getline(f, s)) {
+            if (!s.empty() && s.back() == '\r')
+                s.pop_back();
+
+            vector<string> row;
+            string item;
+            stringstream ss(s);
+
+            while (getline(ss, item, ',')) {
+                row.push_back(item);
             }
+
+            if (!s.empty() && s.back() == ',')
+                row.push_back("");
+
+            a.push_back(row);
         }
+
+        return !f.bad();
     }
 };
 
-// ============================================================
-//  Класс MainWindow — роль окна выполняет консоль
-// ============================================================
-class MainWindow {
-public:
-    MainWindow() { setupUi(); }
-    ~MainWindow() = default;
-
-    void run() {
-        cout << "Введите строку (не более 50 символов, без латиницы):\n> ";
-        cout.flush();
-        string input = readLineUtf8();
-        trim(input);
-        onProcessClicked(input);
-    }
-
-private:
-    void setupUi() {
-#ifdef _WIN32
-        _setmode(_fileno(stdin), _O_U16TEXT);
-        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (hOut != INVALID_HANDLE_VALUE) {
-            DWORD mode = 0;
-            if (GetConsoleMode(hOut, &mode))
-                SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-        SetConsoleOutputCP(CP_UTF8);
-#endif
-    }
-
-    static void trim(string& s) {
-        size_t a = 0, b = s.size();
-        while (a < b && (unsigned char)s[a] <= ' ') ++a;
-        while (b > a && (unsigned char)s[b - 1] <= ' ') --b;
-        s = s.substr(a, b - a);
-    }
-
-    JaggedArray buildFromString(const string& s) const {
-        JaggedArray arr;
-        auto chars = splitUtf8(s);
-        if (chars.size() > 50) chars.resize(50);
-        for (const auto& c : chars) arr.add(c);
-        return arr;
-    }
-
-    void onProcessClicked(const string& input) {
-        if (input.empty()) {
-            cout << "Ошибка: строка не введена.\n";
-            return;
-        }
-
-        // ---- строим исходный массив ----
-        JaggedArray A = buildFromString(input);
-        A.print("Исходный массив A");
-
-        // ---- сортировка внутри строк ----
-        A.sortRows();
-        A.print("\nПосле сортировки внутри строк");
-
-        // ---- оператор "-" (A - B): удаление из A элементов, присутствующих в B ----
-        JaggedArray B = buildFromString("аеёиоуыэюя");   // только гласные
-        JaggedArray C = A - B;
-        C.print("\nA - B  (из A удалены элементы, присутствующие в B)");
-
-        // ---- удаление по двойному индексу ----
-        JaggedArray D = A;
-        if (D.rowSize(CAT_CONSONANT) > 0) {
-            D.removeAt(CAT_CONSONANT, 0);
-            D.print("\nD = A, удалён первый согласный (delete(Согласные, 0))");
-        }
-
-        // ---- удаление по значению ----
-        uint32_t target = 0x043C; // 'м'
-        if (D.removeByValue(target))
-            D.print("\nD, удалены все 'м' (delete('м'))");
-        else
-            cout << "\nВ D нет символа 'м' для удаления.\n";
-
-        // ---- оператор "--" : цифры — корень, символы — сдвиг по коду ----
-        JaggedArray E = A;
-        --E;
-        E.print("\nПосле --E (цифры: корень, символы: сдвиг +1 по коду)");
-
-        // ---- постфиксный вариант ----
-        JaggedArray F = A;
-        JaggedArray old = F--;
-        old.print("\nПостфиксный A-- возвращённое значение (старое)");
-        F.print("Постфиксный A-- сам объект после изменения");
-
-        cout << "\nЛегенда: гласные — красные, согласные — голубые, "
-            "цифры — зелёные, знаки — жёлтые.\n";
-
-        cout << "\nНажмите Enter для выхода...";
-        cout.flush();
-        readLineUtf8();
-    }
-};
-
-// ============================================================
-//  main
-// ============================================================
 int main() {
-    MainWindow w;
-    w.run();
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+
+    if (GetConsoleMode(h, &mode))
+        SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
+
+    setlocale(LC_ALL, "");
+
+    JaggedArray a;
+
+    if (!a.load("data.txt")) {
+        cout << "Ошибка: не удалось прочитать data.txt.\n";
+        cout << "Проверьте расположение файла.\n";
+        return 1;
+    }
+
+    cout << "Данные успешно загружены из файла.\n";
+
+    int n;
+
+    do {
+        cout << "\n===== ЗУБЧАТЫЙ МАССИВ =====\n";
+        cout << "1. Вывести массив\n";
+        cout << "2. Удалить элемент по индексам\n";
+        cout << "3. Удалить элемент по значению\n";
+        cout << "4. Добавить элемент в конец строки\n";
+        cout << "5. Сортировать строки\n";
+        cout << "6. Удалить дубликаты (оператор -)\n";
+        cout << "7. Удалить цифры (оператор --)\n";
+        cout << "0. Выход\n";
+        cout << "Выберите пункт: ";
+
+        if (!(cin >> n)) {
+            cout << "Ошибка ввода.\n";
+            break;
+        }
+
+        if (n == 1) {
+            a.print();
+        }
+        else if (n == 2) {
+            int i, j;
+
+            cout << "Введите индекс строки и элемента: ";
+
+            if (cin >> i >> j)
+                a.deleteItem(i, j);
+            else
+                break;
+        }
+        else if (n == 3) {
+            string s;
+
+            cout << "Введите значение элемента: ";
+
+            if (cin >> s)
+                a.deleteItem(s);
+            else
+                break;
+        }
+        else if (n == 4) {
+            int k;
+            string s;
+
+            cout << "Введите индекс строки: ";
+
+            if (!(cin >> k))
+                break;
+
+            cout << "Введите новый элемент: ";
+
+            if (!(cin >> s))
+                break;
+
+            a.add_endline(k, s);
+        }
+        else if (n == 5) {
+            a.sortRows();
+        }
+        else if (n == 6) {
+            a = a - a;
+            cout << "Дубликаты удалены.\n";
+        }
+        else if (n == 7) {
+            --a;
+            cout << "Цифры удалены.\n";
+        }
+        else if (n != 0) {
+            cout << "Такого пункта нет.\n";
+        }
+
+    } while (n != 0);
+
+    cout << "Программа завершена.\n";
+
     return 0;
 }
