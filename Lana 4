@@ -130,14 +130,10 @@ public:
 };
 int main() {
 #ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
-    if (GetConsoleMode(h, &mode))
-        SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    SetConsoleCP(65001);
+    SetConsoleOutputCP(65001);
 #endif
-    setlocale(LC_ALL, "");
+    setlocale(LC_ALL, ".UTF8");
     JaggedArray a;
     if (!a.load("data.txt")) {
         cout << "Ошибка: не удалось прочитать data.txt.\n";
