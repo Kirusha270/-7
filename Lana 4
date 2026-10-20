@@ -1,432 +1,482 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+// Сохраняйте этот файл в UTF-8 (лучше с BOM) или компилируйте MSVC с ключом /utf-8
+#if defined(_MSC_VER)
+#pragma execution_character_set("utf-8")
+#endif
 
-#include <QMainWindow>
-#include <QLineEdit>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QLabel>
-#include <QString>
-#include <QList>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <iterator>
+#include <cstdint>
 
-class MainWindow : public QMainWindow
-{
-    Q_OBJECT
-public:
-    explicit MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
-protected:
-    bool eventFilter(QObject *obj, QEvent *event) override;
+using namespace std;
 
-private slots:
-    void onLoadPhoto();
-    void onRegister();
-    void onServerChecked(bool checked);
+// ============================================================
+//  Работа с кодировками: всё внутри программы хранится в UTF-8
+// ============================================================
 
-private:
-    QLineEdit *m_nameEdit;
-    QLineEdit *m_surnameEdit;
-    QLineEdit *m_nickEdit;
-    QLineEdit *m_passwordEdit;
-    QLineEdit *m_emailEdit;
-    QLineEdit *m_idEdit;
+static void appendUtf8(string& out, uint32_t cp) {
+    if (cp < 0x80) {
+        out += (char)cp;
+    }
+    else if (cp < 0x800) {
+        out += (char)(0xC0 | (cp >> 6));
+        out += (char)(0x80 | (cp & 0x3F));
+    }
+    else if (cp < 0x10000) {
+        out += (char)(0xE0 | (cp >> 12));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    }
+    else {
+        out += (char)(0xF0 | (cp >> 18));
+        out += (char)(0x80 | ((cp >> 12) & 0x3F));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    }
+}
 
-    // Чекбоксы серверов
-    QList<QCheckBox*> m_serverChecks;
-    QCheckBox *m_selectedServer = nullptr;
+static bool isValidUtf8(const string& s) {
+    size_t i = 0, n = s.size();
 
-    QPushButton *m_loadPhotoBtn;
-    QPushButton *m_registerBtn;
-    QLabel *m_photoLabel;
+    while (i < n) {
+        unsigned char c = (unsigned char)s[i];
+        int len;
 
-    QString m_photoPath;
+        if (c < 0x80) len = 1;
+        else if ((c >> 5) == 0x6 && c >= 0xC2) len = 2;
+        else if ((c >> 4) == 0xE) len = 3;
+        else if ((c >> 3) == 0x1E && c <= 0xF4) len = 4;
+        else return false;
 
-    bool validateFields(QString &error);
-    bool isNicknameTaken(const QString &nick);
-    QString encryptPassword(const QString &password);
-    bool saveUserData(const QString &nick,
-                      const QString &name,
-                      const QString &surname,
-                      const QString &email,
-                      const QString &idKey,
-                      const QString &encryptedPass,
-                      const QString &photoSource);
-    void copyDefaultPhoto(const QString &destDir);
-    QString currentServer() const;
+        if (i + len > n)
+            return false;
+
+        for (int k = 1; k < len; k++) {
+            if (((unsigned char)s[i + k] >> 6) != 0x2)
+                return false;
+        }
+
+        i += len;
+    }
+
+    return true;
+}
+
+// Windows-1251 -> Unicode для байтов 0x80..0xBF
+static const uint16_t CP1251_HIGH[64] = {
+    0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F,
+    0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x003F, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F,
+    0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7,
+    0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407,
+    0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7,
+    0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457
 };
 
-#endif // MAINWINDOW_H
-#include "MainWindow.h"
-#include <QGridLayout>
-#include <QVBoxLayout>
-#include <QLabel>
-#include <QMessageBox>
-#include <QFileDialog>
-#include <QStandardPaths>
-#include <QDir>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QFile>
-#include <QTextStream>
-#include <QPixmap>
-#include <QPainter>
-#include <QRegularExpression>
-#include <QEvent>
-#include <QMouseEvent>
-#include <QStringList>
-#include <QFileInfo>
+static string cp1251ToUtf8(const string& s) {
+    string out;
+    out.reserve(s.size() * 2);
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-{
-    setWindowTitle("Регистрация пользователя");
-    resize(500, 520);
-
-    m_nameEdit = new QLineEdit(this);
-    m_surnameEdit = new QLineEdit(this);
-    m_nickEdit = new QLineEdit(this);
-    m_passwordEdit = new QLineEdit(this);
-    m_passwordEdit->setEchoMode(QLineEdit::Password);
-    m_emailEdit = new QLineEdit(this);
-    m_idEdit = new QLineEdit(this);
-
-    m_loadPhotoBtn = new QPushButton("Загрузить фото", this);
-    m_registerBtn = new QPushButton("Зарегистрироваться", this);
-    m_photoLabel = new QLabel(this);
-    m_photoLabel->setFixedSize(100, 100);
-    m_photoLabel->setStyleSheet("border: 1px solid gray;");
-    m_photoLabel->setAlignment(Qt::AlignCenter);
-    m_photoLabel->setText("Фото");
-
-    // ---- Чекбоксы серверов ----
-    QStringList servers = {"Сервер 1", "Сервер 2", "Сервер 3"};
-    QVBoxLayout *serverLayout = new QVBoxLayout;
-    serverLayout->setSpacing(4);
-
-    for (const QString &srv : servers) {
-        QCheckBox *cb = new QCheckBox(srv, this);
-        cb->setProperty("serverCheck", true);
-        connect(cb, &QCheckBox::toggled, this, &MainWindow::onServerChecked);
-        m_serverChecks.append(cb);
-        serverLayout->addWidget(cb);
-    }
-    m_serverChecks.first()->setChecked(true);
-    m_selectedServer = m_serverChecks.first();
-    // ---------------------------
-
-    QString style = R"(
-        QMainWindow { background-color: #2b2b2b; }
-        QLabel { color: #f0f0f0; }
-        QLineEdit { background-color: #3c3c3c; color: #ffffff; border: 1px solid #555; border-radius: 4px; padding: 4px; }
-        QPushButton { background-color: #5a5a5a; color: #ffffff; border: 1px solid #777; border-radius: 4px; padding: 6px; }
-        QPushButton:hover { background-color: #6a6a6a; }
-        QPushButton:pressed { background-color: #4a4a4a; }
-
-        QCheckBox[serverCheck="true"] {
-            color: #f0f0f0;
-            spacing: 8px;
-            padding: 4px;
-        }
-        QCheckBox[serverCheck="true"]::indicator {
-            width: 16px;
-            height: 16px;
-            border: 2px solid #777;
-            border-radius: 3px;
-            background-color: #3c3c3c;
-        }
-        QCheckBox[serverCheck="true"]::indicator:hover {
-            border-color: #8888ff;
-        }
-        QCheckBox[serverCheck="true"]::indicator:checked {
-            background-color: #2f6fbf;
-            border-color: #7fb3ff;
-        }
-    )";
-    setStyleSheet(style);
-
-    QGridLayout *layout = new QGridLayout;
-    layout->addWidget(new QLabel("Имя:"), 0, 0);
-    layout->addWidget(m_nameEdit, 0, 1);
-    layout->addWidget(new QLabel("Фамилия:"), 1, 0);
-    layout->addWidget(m_surnameEdit, 1, 1);
-    layout->addWidget(new QLabel("Никнейм:"), 2, 0);
-    layout->addWidget(m_nickEdit, 2, 1);
-    layout->addWidget(new QLabel("Пароль:"), 3, 0);
-    layout->addWidget(m_passwordEdit, 3, 1);
-    layout->addWidget(new QLabel("Почта:"), 4, 0);
-    layout->addWidget(m_emailEdit, 4, 1);
-    layout->addWidget(new QLabel("ID-Key:"), 5, 0);
-    layout->addWidget(m_idEdit, 5, 1);
-    layout->addWidget(new QLabel("Сервер:"), 6, 0);
-    layout->addLayout(serverLayout, 6, 1);
-    layout->addWidget(m_loadPhotoBtn, 7, 0);
-    layout->addWidget(m_photoLabel, 7, 1);
-    layout->addWidget(m_registerBtn, 8, 0, 1, 2);
-
-    QWidget *central = new QWidget(this);
-    central->setLayout(layout);
-    setCentralWidget(central);
-
-    connect(m_loadPhotoBtn, &QPushButton::clicked, this, &MainWindow::onLoadPhoto);
-    connect(m_registerBtn, &QPushButton::clicked, this, &MainWindow::onRegister);
-
-    QList<QLineEdit*> edits = {m_nameEdit, m_surnameEdit, m_nickEdit,
-                                m_passwordEdit, m_emailEdit, m_idEdit};
-    for (auto edit : edits) {
-        edit->installEventFilter(this);
+    for (unsigned char c : s) {
+        if (c < 0x80)
+            appendUtf8(out, c);
+        else if (c < 0xC0)
+            appendUtf8(out, CP1251_HIGH[c - 0x80]);
+        else
+            appendUtf8(out, 0x0410 + (c - 0xC0)); // А..я
     }
 
-    QPixmap defaultPix(100, 100);
-    defaultPix.fill(Qt::lightGray);
-    QPainter painter(&defaultPix);
-    painter.setPen(Qt::black);
-    painter.drawText(defaultPix.rect(), Qt::AlignCenter, "Нет фото");
-    m_photoLabel->setPixmap(defaultPix);
-    m_photoPath.clear();
+    return out;
 }
 
-MainWindow::~MainWindow() {}
+static string utf16ToUtf8(const string& s, size_t start, bool bigEndian) {
+    string out;
 
-bool MainWindow::eventFilter(QObject *obj, QEvent *event)
-{
-    if (event->type() == QEvent::MouseButtonDblClick) {
-        QLineEdit *edit = qobject_cast<QLineEdit*>(obj);
-        if (edit) {
-            edit->clear();
+    for (size_t i = start; i + 1 < s.size(); i += 2) {
+        unsigned char b0 = (unsigned char)s[i];
+        unsigned char b1 = (unsigned char)s[i + 1];
+        uint32_t u = bigEndian ? ((b0 << 8) | b1) : ((b1 << 8) | b0);
+
+        if (u >= 0xD800 && u <= 0xDBFF && i + 3 < s.size()) {
+            unsigned char c0 = (unsigned char)s[i + 2];
+            unsigned char c1 = (unsigned char)s[i + 3];
+            uint32_t lo = bigEndian ? ((c0 << 8) | c1) : ((c1 << 8) | c0);
+
+            if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                u = 0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00);
+                i += 2;
+            }
+        }
+
+        appendUtf8(out, u);
+    }
+
+    return out;
+}
+
+// Читает файл и приводит его содержимое к UTF-8
+// (UTF-8, UTF-8 с BOM, UTF-16 LE/BE, Windows-1251)
+static bool readFileAsUtf8(const string& name, string& result) {
+    ifstream f(name, ios::binary);
+
+    if (!f.is_open())
+        return false;
+
+    string raw((istreambuf_iterator<char>(f)), istreambuf_iterator<char>());
+
+    if (raw.size() >= 2 && (unsigned char)raw[0] == 0xFF && (unsigned char)raw[1] == 0xFE) {
+        result = utf16ToUtf8(raw, 2, false);
+    }
+    else if (raw.size() >= 2 && (unsigned char)raw[0] == 0xFE && (unsigned char)raw[1] == 0xFF) {
+        result = utf16ToUtf8(raw, 2, true);
+    }
+    else if (raw.size() >= 3 &&
+        (unsigned char)raw[0] == 0xEF &&
+        (unsigned char)raw[1] == 0xBB &&
+        (unsigned char)raw[2] == 0xBF) {
+        result = raw.substr(3);
+    }
+    else if (isValidUtf8(raw)) {
+        result = raw;
+    }
+    else {
+        result = cp1251ToUtf8(raw); // не UTF-8 -> считаем, что это Windows-1251
+    }
+
+    return true;
+}
+
+// Ввод строки из консоли в UTF-8 (в Windows через ReadConsoleW)
+static bool readLine(string& out) {
+#ifdef _WIN32
+    HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode;
+
+    if (GetConsoleMode(h, &mode)) {
+        wstring w;
+        wchar_t buf[512];
+        DWORD got = 0;
+
+        while (true) {
+            if (!ReadConsoleW(h, buf, 512, &got, NULL) || got == 0)
+                return false;
+
+            w.append(buf, got);
+
+            if (w.back() == L'\n')
+                break;
+        }
+
+        while (!w.empty() && (w.back() == L'\n' || w.back() == L'\r'))
+            w.pop_back();
+
+        if (w.empty()) {
+            out.clear();
             return true;
         }
+
+        int len = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), NULL, 0, NULL, NULL);
+        out.assign(len, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &out[0], len, NULL, NULL);
+        return true;
     }
-    return QMainWindow::eventFilter(obj, event);
-}
+#endif
 
-void MainWindow::onServerChecked(bool checked)
-{
-    QCheckBox *sender = qobject_cast<QCheckBox*>(QObject::sender());
-    if (!sender)
-        return;
-
-    if (checked) {
-        // Взаимоисключение: снимаем галочки с остальных
-        for (QCheckBox *cb : m_serverChecks) {
-            if (cb != sender && cb->isChecked())
-                cb->setChecked(false);
-        }
-        m_selectedServer = sender;
-    } else {
-        // Не разрешаем снять единственную выбранную галочку
-        if (sender == m_selectedServer) {
-            sender->setChecked(true);
-            return;
-        }
-    }
-}
-
-QString MainWindow::currentServer() const
-{
-    return m_selectedServer ? m_selectedServer->text() : QString();
-}
-
-void MainWindow::onLoadPhoto()
-{
-    QString fileName = QFileDialog::getOpenFileName(this,
-                                                    "Выберите фото", QDir::homePath(),
-                                                    "Изображения (*.png *.jpg *.jpeg *.bmp)");
-    if (fileName.isEmpty())
-        return;
-
-    QPixmap pix(fileName);
-    if (pix.isNull()) {
-        QMessageBox::warning(this, "Ошибка", "Не удалось загрузить изображение.");
-        return;
-    }
-
-    m_photoLabel->setPixmap(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    m_photoPath = fileName;
-}
-
-bool MainWindow::validateFields(QString &error)
-{
-    QRegularExpression nameRegex("^[A-Za-zА-Яа-я]+$");
-    if (!nameRegex.match(m_nameEdit->text()).hasMatch()) {
-        error = "Имя должно содержать только буквы.";
+    if (!getline(cin, out))
         return false;
-    }
 
-    QRegularExpression surnameRegex("^[A-ZА-Я][a-zа-я]*$");
-    if (!surnameRegex.match(m_surnameEdit->text()).hasMatch()) {
-        error = "Фамилия должна начинаться с заглавной буквы и содержать только буквы (строчные после первой).";
-        return false;
-    }
+    if (!out.empty() && out.back() == '\r')
+        out.pop_back();
 
-    QRegularExpression nickRegex("^[A-Za-zА-Яа-я0-9_]{3,20}$");
-    if (!nickRegex.match(m_nickEdit->text()).hasMatch()) {
-        error = "Никнейм должен содержать от 3 до 20 символов (буквы, цифры, подчёркивание).";
-        return false;
-    }
-
-    QRegularExpression passRegex("^(?=.*[A-Za-zА-Яа-я])(?=.*\\d).{6,}$");
-    if (!passRegex.match(m_passwordEdit->text()).hasMatch()) {
-        error = "Пароль должен содержать минимум 6 символов, включая букву и цифру.";
-        return false;
-    }
-
-    QRegularExpression emailRegex(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$)");
-    if (!emailRegex.match(m_emailEdit->text()).hasMatch()) {
-        error = "Введите корректный email.";
-        return false;
-    }
-
-    QRegularExpression idRegex("^[A-Z]\\d{3}-\\d{2}[A-Z]-[A-Z]$");
-    if (!idRegex.match(m_idEdit->text()).hasMatch()) {
-        error = "ID-Key должен соответствовать формату: A123-45B-C (заглавная латиница).";
-        return false;
-    }
     return true;
 }
 
-bool MainWindow::isNicknameTaken(const QString &nick)
-{
-    QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-    QDir accountsDir(desktop + "/Accounts");
-    if (!accountsDir.exists())
+static bool readInt(int& x) {
+    string s;
+
+    if (!readLine(s))
         return false;
-    return accountsDir.exists(nick);
+
+    stringstream ss(s);
+    return (bool)(ss >> x);
 }
 
-QString MainWindow::encryptPassword(const QString &password)
-{
-    const QString key = "SecretKey123";
-    QByteArray data = password.toUtf8();
-    QByteArray keyData = key.toUtf8();
-    for (int i = 0; i < data.size(); ++i) {
-        data[i] = data[i] ^ keyData[i % keyData.size()];
+static string trim(const string& s) {
+    size_t b = s.find_first_not_of(" \t");
+
+    if (b == string::npos)
+        return "";
+
+    size_t e = s.find_last_not_of(" \t");
+    return s.substr(b, e - b + 1);
+}
+
+// ============================================================
+//  Зубчатый массив
+// ============================================================
+
+class JaggedArray {
+private:
+    vector<vector<string>> a;
+
+public:
+    vector<string>& operator[](int i) {
+        return a.at(i);
     }
 
-    return data.toBase64();
-}
+    const vector<string>& operator[](int i) const {
+        return a.at(i);
+    }
 
-void MainWindow::copyDefaultPhoto(const QString &destDir)
-{
-    QPixmap defaultPix(200, 200);
-    defaultPix.fill(Qt::lightGray);
-    QPainter painter(&defaultPix);
-    painter.setPen(Qt::black);
-    painter.drawText(defaultPix.rect(), Qt::AlignCenter, "Default");
-    defaultPix.save(destDir + "/avatar.png");
-}
+    int size() const {
+        return (int)a.size();
+    }
 
-bool MainWindow::saveUserData(const QString &nick,
-                              const QString &name,
-                              const QString &surname,
-                              const QString &email,
-                              const QString &idKey,
-                              const QString &encryptedPass,
-                              const QString &photoSource)
-{
-    QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-    QString accountsDirPath = desktop + "/Accounts";
-    QDir accountsDir(accountsDirPath);
-    if (!accountsDir.exists()) {
-        if (!accountsDir.mkpath(accountsDirPath)) {
-            QMessageBox::critical(this, "Ошибка", "Не удалось создать папку Accounts.");
+    void add_endline(int k, const string& item) {
+        if (k >= 0 && k < size())
+            a[k].push_back(item);
+        else
+            cout << "Такой строки нет.\n";
+    }
+
+    void deleteItem(int i, int j) {
+        if (i >= 0 && i < size() &&
+            j >= 0 && j < (int)a[i].size()) {
+            a[i].erase(a[i].begin() + j);
+            cout << "Элемент удален.\n";
+        }
+        else {
+            cout << "Неверные индексы.\n";
+        }
+    }
+
+    void deleteItem(const string& item) {
+        bool found = false;
+
+        for (auto& row : a) {
+            auto it = remove(row.begin(), row.end(), item);
+
+            if (it != row.end()) {
+                row.erase(it, row.end());
+                found = true;
+            }
+        }
+
+        if (found)
+            cout << "Элементы удалены.\n";
+        else
+            cout << "Такого элемента нет.\n";
+    }
+
+    void sortRows() {
+        for (auto& row : a)
+            sort(row.begin(), row.end());
+
+        cout << "Строки отсортированы.\n";
+    }
+
+    JaggedArray operator-(const JaggedArray& b) const {
+        JaggedArray c = *this;
+
+        for (auto& row : c.a) {
+            vector<string> t;
+
+            for (const auto& s : row) {
+                if (find(t.begin(), t.end(), s) == t.end())
+                    t.push_back(s);
+            }
+
+            row = t;
+        }
+
+        return c;
+    }
+
+    JaggedArray& operator--() {
+        for (auto& row : a) {
+            for (auto& s : row) {
+                string t;
+
+                for (unsigned char c : s) {
+                    if (c < '0' || c > '9')
+                        t += (char)c;
+                }
+
+                s = t;
+            }
+        }
+
+        return *this;
+    }
+
+    void print() const {
+        const char* colors[] = {
+            "\033[91m",
+            "\033[92m",
+            "\033[93m",
+            "\033[94m",
+            "\033[95m",
+            "\033[96m"
+        };
+
+        for (int i = 0; i < size(); i++) {
+            cout << colors[i % 6];
+            cout << "Строка " << i << ": ";
+
+            for (const auto& s : a[i])
+                cout << "[" << s << "] ";
+
+            cout << "\033[0m\n";
+        }
+
+        cout.flush();
+    }
+
+    bool load(const string& name) {
+        string text;
+
+        if (!readFileAsUtf8(name, text))
             return false;
+
+        a.clear();
+
+        stringstream in(text);
+        string s;
+
+        while (getline(in, s)) {
+            if (!s.empty() && s.back() == '\r')
+                s.pop_back();
+
+            vector<string> row;
+            string item;
+            stringstream ss(s);
+
+            while (getline(ss, item, ','))
+                row.push_back(item);
+
+            if (!s.empty() && s.back() == ',')
+                row.push_back("");
+
+            a.push_back(row);
         }
+
+        return true;
+    }
+};
+
+int main() {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+
+    if (GetConsoleMode(h, &mode))
+        SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
+
+    // setlocale(LC_ALL, "") убран намеренно: он мог ломать вывод UTF-8
+
+    JaggedArray a;
+
+    if (!a.load("data.txt")) {
+        cout << "Ошибка: не удалось прочитать data.txt.\n";
+        cout << "Проверьте расположение файла.\n";
+        return 1;
     }
 
-    QString userDirPath = accountsDirPath + "/" + nick;
-    QDir userDir(userDirPath);
-    if (userDir.exists()) {
-        QMessageBox::critical(this, "Ошибка", "Папка пользователя уже существует.");
-        return false;
-    }
-    if (!userDir.mkpath(userDirPath)) {
-        QMessageBox::critical(this, "Ошибка", "Не удалось создать папку пользователя.");
-        return false;
-    }
+    cout << "Данные успешно загружены из файла.\n";
 
-    if (!photoSource.isEmpty() && QFile::exists(photoSource)) {
-        QString ext = QFileInfo(photoSource).suffix();
-        QString destPhoto = userDirPath + "/avatar." + ext;
-        if (!QFile::copy(photoSource, destPhoto)) {
-            copyDefaultPhoto(userDirPath);
+    int n = -1;
+
+    do {
+        cout << "\n===== ЗУБЧАТЫЙ МАССИВ =====\n";
+        cout << "1. Вывести массив\n";
+        cout << "2. Удалить элемент по индексам\n";
+        cout << "3. Удалить элемент по значению\n";
+        cout << "4. Добавить элемент в конец строки\n";
+        cout << "5. Сортировать строки\n";
+        cout << "6. Удалить дубликаты (оператор -)\n";
+        cout << "7. Удалить цифры (оператор --)\n";
+        cout << "0. Выход\n";
+        cout << "Выберите пункт: ";
+        cout.flush();
+
+        if (!readInt(n)) {
+            cout << "Ошибка ввода.\n";
+            break;
         }
-    } else {
-        copyDefaultPhoto(userDirPath);
-    }
 
-    QJsonObject json;
-    json["name"] = name;
-    json["surname"] = surname;
-    json["nickname"] = nick;
-    json["email"] = email;
-    json["id_key"] = idKey;
-    json["server"] = currentServer();
+        if (n == 1) {
+            a.print();
+        }
+        else if (n == 2) {
+            int i, j;
 
-    QJsonDocument doc(json);
-    QString jsonFilePath = userDirPath + "/data.json";
-    QFile jsonFile(jsonFilePath);
-    if (!jsonFile.open(QIODevice::WriteOnly)) {
-        QMessageBox::critical(this, "Ошибка", "Не удалось создать JSON файл.");
-        return false;
-    }
-    jsonFile.write(doc.toJson());
-    jsonFile.close();
+            cout << "Введите индекс строки: ";
+            cout.flush();
+            if (!readInt(i)) break;
 
-    QString txtFilePath = userDirPath + "/password.txt";
-    QFile txtFile(txtFilePath);
-    if (!txtFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Ошибка", "Не удалось создать TXT файл.");
-        return false;
-    }
-    QTextStream out(&txtFile);
-    out << email << "/" << encryptedPass;
-    txtFile.close();
+            cout << "Введите индекс элемента: ";
+            cout.flush();
+            if (!readInt(j)) break;
 
-    return true;
-}
+            a.deleteItem(i, j);
+        }
+        else if (n == 3) {
+            string s;
 
-void MainWindow::onRegister()
-{
-    QString error;
-    if (!validateFields(error)) {
-        QMessageBox::warning(this, "Ошибка валидации", error);
-        return;
-    }
+            cout << "Введите значение элемента: ";
+            cout.flush();
+            if (!readLine(s)) break;
 
-    QString nick = m_nickEdit->text();
+            a.deleteItem(trim(s));
+        }
+        else if (n == 4) {
+            int k;
+            string s;
 
-    if (isNicknameTaken(nick)) {
-        QMessageBox::warning(this, "Ошибка", "Никнейм уже занят. Выберите другой.");
-        return;
-    }
+            cout << "Введите индекс строки: ";
+            cout.flush();
+            if (!readInt(k)) break;
 
-    QString encrypted = encryptPassword(m_passwordEdit->text());
+            cout << "Введите новый элемент: ";
+            cout.flush();
+            if (!readLine(s)) break;
 
-    bool ok = saveUserData(nick,
-                           m_nameEdit->text(),
-                           m_surnameEdit->text(),
-                           m_emailEdit->text(),
-                           m_idEdit->text(),
-                           encrypted,
-                           m_photoPath);
+            a.add_endline(k, trim(s));
+        }
+        else if (n == 5) {
+            a.sortRows();
+        }
+        else if (n == 6) {
+            a = a - a;
+            cout << "Дубликаты удалены.\n";
+        }
+        else if (n == 7) {
+            --a;
+            cout << "Цифры удалены.\n";
+        }
+        else if (n != 0) {
+            cout << "Такого пункта нет.\n";
+        }
 
-    if (ok) {
-        QMessageBox::information(this, "Успех", "Регистрация успешно завершена!");
+    } while (n != 0);
 
-        m_nameEdit->clear();
-        m_surnameEdit->clear();
-        m_nickEdit->clear();
-        m_passwordEdit->clear();
-        m_emailEdit->clear();
-        m_idEdit->clear();
+    cout << "Программа завершена.\n";
 
-        QPixmap defaultPix(100, 100);
-        defaultPix.fill(Qt::lightGray);
-        QPainter painter(&defaultPix);
-        painter.setPen(Qt::black);
-        painter.drawText(defaultPix.rect(), Qt::AlignCenter, "Нет фото");
-        m_photoLabel->setPixmap(defaultPix);
-        m_photoPath.clear();
-    }
+    return 0;
 }
