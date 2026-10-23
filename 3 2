@@ -1,12 +1,12 @@
 #pragma execution_character_set("utf-8")
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <fstream>
 #include <sstream>
-#include <locale>
+#include <clocale>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -18,53 +18,134 @@ class JaggedArray {
 private:
     vector<vector<string>> a;
 
+    void removeEmptyEndRows() {
+        while (!a.empty() && a.back().empty())
+            a.pop_back();
+    }
+
 public:
-    vector<string>& operator[](int i) {
-        return a.at(i);
+    size_t size() const {
+        return a.size();
     }
 
-    const vector<string>& operator[](int i) const {
-        return a.at(i);
-    }
+    void load(const string& filename) {
+        ifstream f(filename, ios::binary);
 
-    int size() const {
-        return (int)a.size();
-    }
-
-    void add_endline(int k, const string& item) {
-        if (k >= 0 && k < size())
-            a[k].push_back(item);
-        else
-            cout << "Такой строки нет.\n";
-    }
-
-    void deleteItem(int i, int j) {
-        if (i >= 0 && i < size() &&
-            j >= 0 && j < (int)a[i].size()) {
-            a[i].erase(a[i].begin() + j);
-            cout << "Элемент удален.\n";
+        if (!f.is_open()) {
+            cout << "Не удалось открыть файл: " << filename << '\n';
+            return;
         }
-        else {
-            cout << "Неверные индексы.\n";
+
+        string line;
+        bool firstLine = true;
+
+        while (getline(f, line)) {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
+            if (firstLine) {
+                firstLine = false;
+
+                if (line.size() >= 3 &&
+                    (unsigned char)line[0] == 0xEF &&
+                    (unsigned char)line[1] == 0xBB &&
+                    (unsigned char)line[2] == 0xBF) {
+                    line.erase(0, 3);
+                }
+            }
+
+            vector<string> row;
+            string item;
+            stringstream ss(line);
+
+            while (getline(ss, item, ','))
+                row.push_back(item);
+
+            if (!line.empty() && line.back() == ',')
+                row.push_back("");
+
+            a.push_back(row);
         }
     }
 
-    void deleteItem(const string& item) {
-        bool found = false;
+    void print(const string& title) const {
+        const string colors[] = {
+            "\033[91m", "\033[92m", "\033[93m",
+            "\033[94m", "\033[95m", "\033[96m"
+        };
+
+        cout << "\n\033[1m" << title << "\033[0m\n";
+
+        if (a.empty()) {
+            cout << "(массив пуст)\n";
+            return;
+        }
+
+        for (size_t i = 0; i < a.size(); ++i) {
+            cout << colors[i % 6]
+                 << "Строка " << i << ": "
+                 << "\033[0m";
+
+            if (a[i].empty()) {
+                cout << "(пустая строка)";
+            } else {
+                for (size_t j = 0; j < a[i].size(); ++j) {
+                    if (j > 0)
+                        cout << " | ";
+
+                    cout << a[i][j];
+                }
+            }
+
+            cout << '\n';
+        }
+    }
+
+    void deleteItem(size_t i, size_t j) {
+        if (i >= a.size()) {
+            cout << "Ошибка: строки с индексом " << i
+                 << " нет. Индексы начинаются с 0.\n";
+            return;
+        }
+
+        if (j >= a[i].size()) {
+            cout << "Ошибка: в строке " << i
+                 << " нет элемента с индексом " << j << ".\n";
+            return;
+        }
+
+        cout << "Удалён элемент: \"" << a[i][j] << "\"\n";
+
+        a[i].erase(a[i].begin() + j);
+        removeEmptyEndRows();
+    }
+
+    void deleteItem(const string& value) {
+        int count = 0;
 
         for (auto& row : a) {
-            auto it = remove(row.begin(), row.end(), item);
+            size_t oldSize = row.size();
 
-            if (it != row.end()) {
-                row.erase(it, row.end());
-                found = true;
-            }
+            row.erase(
+                remove(row.begin(), row.end(), value),
+                row.end()
+            );
+
+            count += (int)(oldSize - row.size());
         }
 
-        if (found)
-            cout << "Элементы удалены.\n";
-        else
-            cout << "Такого элемента нет.\n";
+        removeEmptyEndRows();
+
+        cout << "Удалено элементов: " << count << '\n';
+    }
+
+    void add_endline(size_t k, const string& item) {
+        while (a.size() <= k)
+            a.push_back(vector<string>());
+
+        a[k].push_back(item);
+
+        cout << "Элемент добавлен в строку " << k << ".\n";
     }
 
     void sortRows() {
@@ -75,89 +156,48 @@ public:
     }
 
     JaggedArray operator-(const JaggedArray& b) const {
-        JaggedArray c = *this;
+        JaggedArray result = *this;
 
-        for (auto& row : c.a) {
-            vector<string> t;
+        for (auto& row : result.a) {
+            row.erase(
+                remove_if(row.begin(), row.end(),
+                    [&b](const string& item) {
+                        for (const auto& otherRow : b.a) {
+                            if (find(otherRow.begin(), otherRow.end(), item)
+                                != otherRow.end()) {
+                                return true;
+                            }
+                        }
 
-            for (const auto& s : row) {
-                if (find(t.begin(), t.end(), s) == t.end())
-                    t.push_back(s);
-            }
-
-            row = t;
+                        return false;
+                    }),
+                row.end()
+            );
         }
 
-        return c;
+        result.removeEmptyEndRows();
+        return result;
     }
 
-    JaggedArray& operator--() {
+    void operator--() {
         for (auto& row : a) {
-            for (auto& s : row) {
-                string t;
-
-                for (unsigned char c : s) {
-                    if (c < '0' || c > '9')
-                        t += c;
-                }
-
-                s = t;
-            }
-        }
-
-        return *this;
-    }
-
-    void print() const {
-        const char* colors[] = {
-            "\033[91m",
-            "\033[92m",
-            "\033[93m",
-            "\033[94m",
-            "\033[95m",
-            "\033[96m"
-        };
-
-        for (int i = 0; i < size(); i++) {
-            cout << colors[i % 6];
-            cout << "Строка " << i << ": ";
-
-            for (const auto& s : a[i])
-                cout << "[" << s << "] ";
-
-            cout << "\033[0m\n";
-        }
-    }
-
-    bool load(const string& name) {
-        ifstream f(name);
-
-        if (!f.is_open())
-            return false;
-
-        a.clear();
-
-        string s;
-
-        while (getline(f, s)) {
-            if (!s.empty() && s.back() == '\r')
-                s.pop_back();
-
-            vector<string> row;
-            string item;
-            stringstream ss(s);
-
-            while (getline(ss, item, ',')) {
-                row.push_back(item);
+            for (auto& item : row) {
+                item.erase(
+                    remove_if(item.begin(), item.end(),
+                        [](unsigned char c) {
+                            return c >= '0' && c <= '9';
+                        }),
+                    item.end()
+                );
             }
 
-            if (!s.empty() && s.back() == ',')
-                row.push_back("");
-
-            a.push_back(row);
+            row.erase(
+                remove(row.begin(), row.end(), ""),
+                row.end()
+            );
         }
 
-        return !f.bad();
+        removeEmptyEndRows();
     }
 };
 
@@ -167,100 +207,108 @@ int main() {
     SetConsoleCP(CP_UTF8);
 
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
+    DWORD mode = 0;
 
     if (GetConsoleMode(h, &mode))
         SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 #endif
 
-    setlocale(LC_ALL, "");
+    setlocale(LC_ALL, ".UTF8");
 
-    JaggedArray a;
+    JaggedArray a, b, c;
 
-    if (!a.load("data.txt")) {
-        cout << "Ошибка: не удалось прочитать data.txt.\n";
-        cout << "Проверьте расположение файла.\n";
-        return 1;
-    }
+    a.load("data.txt");
+    b.load("data2.txt");
+    c = a;
 
-    cout << "Данные успешно загружены из файла.\n";
-
-    int n;
+    int choice;
 
     do {
-        cout << "\n===== ЗУБЧАТЫЙ МАССИВ =====\n";
-        cout << "1. Вывести массив\n";
-        cout << "2. Удалить элемент по индексам\n";
-        cout << "3. Удалить элемент по значению\n";
-        cout << "4. Добавить элемент в конец строки\n";
-        cout << "5. Сортировать строки\n";
-        cout << "6. Удалить дубликаты (оператор -)\n";
-        cout << "7. Удалить цифры (оператор --)\n";
+        cout << "\n========== МЕНЮ ==========\n";
+        cout << "1. Вывести три массива\n";
+        cout << "2. Удалить элемент по индексам из массива 1\n";
+        cout << "3. Удалить элемент по значению из массива 1\n";
+        cout << "4. Добавить элемент в строку массива 1\n";
+        cout << "5. Отсортировать строки массива 1\n";
+        cout << "6. Удалить из массива 1 элементы, которые есть в массиве 2\n";
+        cout << "7. Удалить цифры из массивов 1 и 2\n";
         cout << "0. Выход\n";
-        cout << "Выберите пункт: ";
+        cout << "Выберите действие: ";
 
-        if (!(cin >> n)) {
-            cout << "Ошибка ввода.\n";
-            break;
+        if (!(cin >> choice)) {
+            cin.clear();
+            cin.ignore(10000, '\n');
+            cout << "Введите номер пункта меню.\n";
+            continue;
         }
 
-        if (n == 1) {
-            a.print();
+        if (choice == 1) {
+            a.print("Массив 1");
+            b.print("Массив 2");
+            c.print("Массив 3");
         }
-        else if (n == 2) {
-            int i, j;
+        else if (choice == 2) {
+            size_t i, j;
 
-            cout << "Введите индекс строки и элемента: ";
+            cout << "Введите индекс строки (от 0): ";
+            cin >> i;
 
-            if (cin >> i >> j)
-                a.deleteItem(i, j);
-            else
-                break;
+            cout << "Введите индекс элемента (от 0): ";
+            cin >> j;
+
+            a.deleteItem(i, j);
+            a.print("Массив 1 после удаления");
         }
-        else if (n == 3) {
-            string s;
+        else if (choice == 3) {
+            string value;
 
-            cout << "Введите значение элемента: ";
+            cout << "Введите значение для удаления: ";
+            cin >> ws;
+            getline(cin, value);
 
-            if (cin >> s)
-                a.deleteItem(s);
-            else
-                break;
+            a.deleteItem(value);
+            a.print("Массив 1 после удаления");
         }
-        else if (n == 4) {
-            int k;
-            string s;
+        else if (choice == 4) {
+            size_t k;
+            string item;
 
-            cout << "Введите индекс строки: ";
+            cout << "Введите индекс строки (от 0): ";
+            cin >> k;
 
-            if (!(cin >> k))
-                break;
+            cout << "Введите элемент: ";
+            cin >> ws;
+            getline(cin, item);
 
-            cout << "Введите новый элемент: ";
-
-            if (!(cin >> s))
-                break;
-
-            a.add_endline(k, s);
+            a.add_endline(k, item);
+            a.print("Массив 1 после добавления");
         }
-        else if (n == 5) {
+        else if (choice == 5) {
             a.sortRows();
+            a.print("Массив 1 после сортировки");
         }
-        else if (n == 6) {
-            a = a - a;
-            cout << "Дубликаты удалены.\n";
+        else if (choice == 6) {
+            c = a - b;
+            a = c;
+
+            cout << "Совпадающие элементы удалены из массива 1.\n";
+            cout << "Массив 2 не изменён.\n";
+
+            a.print("Массив 1 после операции");
         }
-        else if (n == 7) {
+        else if (choice == 7) {
             --a;
-            cout << "Цифры удалены.\n";
+            --b;
+
+            cout << "Цифры удалены из каждого массива отдельно.\n";
+            a.print("Массив 1");
+            b.print("Массив 2");
         }
-        else if (n != 0) {
+        else if (choice != 0) {
             cout << "Такого пункта нет.\n";
         }
 
-    } while (n != 0);
-
-    cout << "Программа завершена.\n";
+    } while (choice != 0);
 
     return 0;
 }
