@@ -94,14 +94,15 @@ public:
 
         for (size_t i = 0; i < a.size(); ++i) {
             cout << colors[i % 6]
-                 << "Строка " << i << ": ";
+                << "Строка " << i << ": ";
 
             if (a[i].empty()) {
                 cout << "(пустая)";
-            } else {
+            }
+            else {
                 for (size_t j = 0; j < a[i].size(); ++j) {
                     if (j > 0)
-                        cout << " | ";
+                        cout << "  ";
 
                     cout << a[i][j];
                 }
@@ -172,8 +173,8 @@ public:
                     [&b](const string& item) {
                         for (const auto& otherRow : b.a) {
                             if (find(otherRow.begin(),
-                                     otherRow.end(),
-                                     item) != otherRow.end())
+                                otherRow.end(),
+                                item) != otherRow.end())
                                 return true;
                         }
 
@@ -307,7 +308,7 @@ int main() {
             a = a - b;
 
             cout << "Элементы, встречающиеся в обоих массивах, "
-                    "удалены из массива 1.\n";
+                "удалены из массива 1.\n";
             cout << "Массив 2 не изменён.\n";
 
             a.print("Массив 1");
